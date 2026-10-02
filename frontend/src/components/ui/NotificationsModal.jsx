@@ -18,11 +18,18 @@ export function NotificationsModal({ isOpen, onClose, items, onMarkAllRead }) {
             isOpen={isOpen}
             onClose={onClose}
             title="Уведомления"
-            footer={unreadCount > 0 ? (
-                <button type="button" className="app-modal-action" onClick={onMarkAllRead}>
-                    Прочитать все
-                </button>
-            ) : null}
+            footer={(
+                <>
+                    <Link to="/notifications" className="app-modal-link" onClick={onClose}>
+                        Все уведомления
+                    </Link>
+                    {unreadCount > 0 && (
+                        <button type="button" className="app-modal-action" onClick={onMarkAllRead}>
+                            Прочитать все
+                        </button>
+                    )}
+                </>
+            )}
         >
             {items.length === 0 ? (
                 <p className="app-modal-empty">Нет уведомлений</p>

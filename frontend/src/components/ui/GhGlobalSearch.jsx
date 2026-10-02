@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLabSkillRepos } from '../../context/LabSkillReposContext';
-import { CURRENT_USER, LABSKILL_USERS, LABSKILL_EXPLORE_REPOS } from '../../data/mockData';
+import { LABSKILL_USERS, LABSKILL_EXPLORE_REPOS } from '../../data/mockData';
+import { useUserSettings } from '../../context/UserSettingsContext';
 import { mergeSearchRepos } from '../../utils/labskillUtils';
 import { SearchIcon, RepoIcon } from '../pages/icons';
 
@@ -11,6 +12,7 @@ function getUserByUsername(users, username) {
 
 export function GhGlobalSearch({ users = LABSKILL_USERS, exploreRepos = LABSKILL_EXPLORE_REPOS }) {
     const navigate = useNavigate();
+    const { user: currentUser } = useUserSettings();
     const { repos: contextRepos } = useLabSkillRepos();
     const repos = useMemo(
         () => mergeSearchRepos(contextRepos, exploreRepos),
@@ -58,11 +60,11 @@ export function GhGlobalSearch({ users = LABSKILL_USERS, exploreRepos = LABSKILL
     function goToUser(user) {
         setOpen(false);
         setQuery('');
-        if (user.username === CURRENT_USER.username) {
-            navigate('/labskill');
+        if (user.username === currentUser.username) {
+            navigate('/profile');
             return;
         }
-        navigate(`/labskill?tab=repositories&q=${encodeURIComponent(user.username)}`);
+        navigate(`/users/${user.username}`);
     }
 
     function goToRepo(repo) {

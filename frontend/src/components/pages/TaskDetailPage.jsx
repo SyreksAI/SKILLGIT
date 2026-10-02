@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getTaskById, getDirectionLabel } from '../../data/mockData';
+import { companySlugFromName } from '../../data/companyAdminData';
 import { HeaderActions } from '../ui/HeaderActions';
 import { EmptyState } from '../ui/EmptyState';
 import {
@@ -83,7 +84,9 @@ export function TaskDetailPage() {
                             {task.company.charAt(0)}
                         </div>
                         <div>
-                            <span className="task-detail-company">{task.company}</span>
+                            <Link to={`/companies/${companySlugFromName(task.company)}`} className="task-detail-company">
+                                {task.company}
+                            </Link>
                             <h1>{task.title}</h1>
                             <div className="task-detail-badges">
                                 <span className={`badge badge--${task.badge.kind}`}>

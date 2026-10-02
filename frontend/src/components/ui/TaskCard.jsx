@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { companySlugFromName } from '../../data/companyAdminData';
 import { ClockIcon } from '../pages/icons';
 
 export function TaskCard({ task, onApply }) {
@@ -9,7 +10,9 @@ export function TaskCard({ task, onApply }) {
                     <span className="home-task-logo" style={{ background: task.companyColor }}>
                         {task.company.charAt(0)}
                     </span>
-                    <span className="home-task-company-name">{task.company}</span>
+                    <Link to={`/companies/${companySlugFromName(task.company)}`} className="home-task-company-name">
+                        {task.company}
+                    </Link>
                 </div>
                 <span className={`badge badge--${task.badge.kind}`}>{task.badge.text}</span>
             </div>

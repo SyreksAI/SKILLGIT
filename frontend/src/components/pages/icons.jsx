@@ -69,6 +69,13 @@ export const ArrowRightIcon = () => (
     </svg>
 );
 
+export const ArrowUpRightIcon = () => (
+    <svg {...base}>
+        <line x1="7" y1="17" x2="17" y2="7" />
+        <polyline points="7 7 17 7 17 17" />
+    </svg>
+);
+
 
 export const ChevronRightIcon = () => (
     <svg {...base}>
@@ -110,6 +117,18 @@ export const TrophyIcon = () => (
 export const StarIcon = () => (
     <svg {...base}>
         <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2" />
+    </svg>
+);
+
+export const SparkleIcon = () => (
+    <svg
+        width={14}
+        height={14}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        stroke="none"
+    >
+        <path d="M12 1.5l1.35 4.15h4.4l-3.55 2.58 1.35 4.15L12 9.8 8.45 12.4l1.35-4.15L6.25 5.65h4.4L12 1.5z" />
     </svg>
 );
 
@@ -178,6 +197,44 @@ export const ListIcon = () => (
     </svg>
 );
 
+export const EditSquareIcon = () => (
+    <svg {...base}>
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.375 2.625a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414L11.5 15.5 8 16l.5-3.5 9.375-9.375z" />
+    </svg>
+);
+
+export const PlugIcon = () => (
+    <svg {...base}>
+        <path d="M12 22v-5" />
+        <path d="M9 8V2" />
+        <path d="M15 8V2" />
+        <path d="M18 8v4a6 6 0 0 1-12 0V8z" />
+    </svg>
+);
+
+/** Sidebar toggle — panel + chevron (collapse/expand chat list) */
+export const PanelLeftToggleIcon = ({ open = false }) => (
+    <svg
+        width={20}
+        height={20}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+        <line x1="9.5" y1="3.5" x2="9.5" y2="20.5" />
+        {open ? (
+            <polyline points="17.5 9 14.5 12 17.5 15" />
+        ) : (
+            <polyline points="14.5 9 17.5 12 14.5 15" />
+        )}
+    </svg>
+);
+
 export const SearchIcon = () => (
     <svg {...base}>
         <circle cx="11" cy="11" r="8" />
@@ -241,6 +298,23 @@ export const PhoneIcon = () => (
     </svg>
 );
 
+export const MicIcon = () => (
+    <svg {...base}>
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3z" />
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+        <line x1="12" y1="18" x2="12" y2="22" />
+        <line x1="8" y1="22" x2="16" y2="22" />
+    </svg>
+);
+
+export const WaveformIcon = () => (
+    <svg {...base} strokeWidth="2.5">
+        <line x1="8" y1="15" x2="8" y2="9" />
+        <line x1="12" y1="17" x2="12" y2="7" />
+        <line x1="16" y1="14" x2="16" y2="10" />
+    </svg>
+);
+
 export const MoreIcon = () => (
     <svg {...base}>
         <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" />
@@ -276,6 +350,21 @@ export const SmileIcon = () => (
         <path d="M8 14s1.5 2 4 2 4-2 4-2" />
         <line x1="9" y1="9" x2="9.01" y2="9" />
         <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+);
+
+export const LightbulbIcon = () => (
+    <svg {...base}>
+        <line x1="12" y1="1" x2="12" y2="3" />
+        <line x1="5.2" y1="3.2" x2="6.6" y2="4.6" />
+        <line x1="18.8" y1="3.2" x2="17.4" y2="4.6" />
+        <line x1="2.5" y1="8.5" x2="4.3" y2="9.2" />
+        <line x1="21.5" y1="8.5" x2="19.7" y2="9.2" />
+        <line x1="4" y1="13.5" x2="5.6" y2="13" />
+        <line x1="20" y1="13.5" x2="18.4" y2="13" />
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M12 5a6.5 6.5 0 0 0-4 11.1V17h8v-0.9A6.5 6.5 0 0 0 12 5z" />
     </svg>
 );
 
@@ -357,6 +446,43 @@ export const CubeIcon = () => (
 export const FilterIcon = () => (
     <svg {...base}>
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+);
+
+export const SlidersHorizontalIcon = () => (
+    <svg {...base}>
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="7" y1="12" x2="17" y2="12" />
+        <line x1="10" y1="18" x2="14" y2="18" />
+    </svg>
+);
+
+export const NewspaperIcon = () => (
+    <svg {...base}>
+        <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
+        <path d="M7 9h10M7 13h10M7 17h6" />
+    </svg>
+);
+
+export const ShoppingBagIcon = () => (
+    <svg {...base}>
+        <path d="M6 8h12l-1.2 11H7.2L6 8z" />
+        <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+    </svg>
+);
+
+export const MusicIcon = () => (
+    <svg {...base}>
+        <path d="M9 18V5l10-2v13" />
+        <circle cx="7" cy="18" r="2" />
+        <circle cx="17" cy="16" r="2" />
+    </svg>
+);
+
+export const MapPinIcon = () => (
+    <svg {...base}>
+        <path d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10z" />
+        <circle cx="12" cy="11" r="2" />
     </svg>
 );
 

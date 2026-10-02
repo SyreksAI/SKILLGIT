@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useSearchParam } from '../../hooks/useSearchParam';
 import { DIRECTIONS } from '../../data/mockData';
 import { GhDropdown } from '../ui/GhDropdown';
@@ -30,6 +31,8 @@ const NOTIFICATIONS = [
 const SECTION_IDS = SECTIONS.map(s => s.id);
 
 export function SettingsPage() {
+    const navigate = useNavigate();
+    const { user: authUser, logout } = useAuth();
     const [section, setSection] = useSearchParam('section', 'public', SECTION_IDS);
     const { user, profile, notifications, saveProfile, toggleNotification, getDirectionLabel } = useUserSettings();
     const [draft, setDraft] = useState(profile);
@@ -243,10 +246,11 @@ export function SettingsPage() {
                                 <h2>Аккаунт</h2>
                                 <p>Безопасность и вход в SKILLGIT.</p>
                             </div>
+
                             <div className="account-form">
                                 <label className="account-field account-field-full">
                                     <span>Email</span>
-                                    <input type="email" value="ivan.ivanov@mail.ru" readOnly />
+                                    <input type="email" value={authUser?.email ?? 'ivan.ivanov@mail.ru'} readOnly />
                                 </label>
                                 <label className="account-field account-field-full">
                                     <span>Новый пароль</span>
@@ -259,7 +263,16 @@ export function SettingsPage() {
                             </div>
                             <div className="account-actions">
                                 <button type="button" className="account-save-btn">Обновить пароль</button>
-                                <button type="button" className="account-danger-btn">Выйти из аккаунта</button>
+                                <button
+                                    type="button"
+                                    className="account-danger-btn"
+                                    onClick={() => {
+                                        logout();
+                                        navigate('/login');
+                                    }}
+                                >
+                                    Выйти из аккаунта
+                                </button>
                             </div>
                         </div>
                     )}

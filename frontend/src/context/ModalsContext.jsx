@@ -5,7 +5,8 @@ import React, {
     useMemo,
     useState,
 } from 'react';
-import { CONVERSATIONS, NOTIFICATIONS as NOTIFICATIONS_MOCK } from '../data/mockData';
+import { CONVERSATIONS } from '../data/mockData';
+import { useNotifications } from './NotificationsContext';
 import { NotificationsModal } from '../components/ui/NotificationsModal';
 import { MessagesModal } from '../components/ui/MessagesModal';
 import { ThemeModal } from '../components/ui/ThemeModal';
@@ -18,9 +19,8 @@ export function ModalsProvider({ children }) {
     const [messagesOpen, setMessagesOpen] = useState(false);
     const [themeOpen, setThemeOpen] = useState(false);
     const [balanceOpen, setBalanceOpen] = useState(false);
-    const [notifications, setNotifications] = useState(NOTIFICATIONS_MOCK);
+    const { notifications, markAllRead, unreadCount } = useNotifications();
 
-    const unreadNotifications = notifications.filter(item => !item.read).length;
     const unreadMessages = CONVERSATIONS.reduce((sum, chat) => sum + (chat.unread ?? 0), 0);
 
     const closeAll = useCallback(() => {
@@ -50,18 +50,14 @@ export function ModalsProvider({ children }) {
         setBalanceOpen(true);
     }, [closeAll]);
 
-    const markAllNotificationsRead = useCallback(() => {
-        setNotifications(prev => prev.map(item => ({ ...item, read: true })));
-    }, []);
-
     const value = useMemo(() => ({
         openNotifications,
         openMessages,
         openTheme,
         openBalance,
-        unreadNotifications,
+        unreadNotifications: unreadCount,
         unreadMessages,
-    }), [openNotifications, openMessages, openTheme, openBalance, unreadNotifications, unreadMessages]);
+    }), [openNotifications, openMessages, openTheme, openBalance, unreadCount, unreadMessages]);
 
     return (
         <ModalsContext.Provider value={value}>
@@ -70,7 +66,7 @@ export function ModalsProvider({ children }) {
                 isOpen={notificationsOpen}
                 onClose={() => setNotificationsOpen(false)}
                 items={notifications}
-                onMarkAllRead={markAllNotificationsRead}
+                onMarkAllRead={markAllRead}
             />
             <MessagesModal
                 isOpen={messagesOpen}

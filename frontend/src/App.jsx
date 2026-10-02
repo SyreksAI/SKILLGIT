@@ -1,8 +1,10 @@
 import React from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import AppRouter from './AppRouter';
+import { AuthSync } from './components/auth/AuthSync';
+import { useAuth } from './context/AuthContext';
 import { useUserSettings } from './context/UserSettingsContext';
-import { SettingsIcon, RocketIcon } from './components/pages/icons';
+import { SettingsIcon, RocketIcon, AgentsIcon } from './components/pages/icons';
 
 const iconProps = {
   width: 20,
@@ -37,6 +39,7 @@ const NAV = [
   { to: '/chat', Icon: IconChat, label: 'Чат', badge: 12 },
   { to: '/team', Icon: IconTeam, label: 'Команда' },
   { to: '/labskill', Icon: IconLab, label: 'LabSkill' },
+  { to: '/skillmate', Icon: AgentsIcon, label: 'SkillMate' },
 ];
 
 const PAGE_TITLES = {
@@ -50,6 +53,7 @@ const PAGE_TITLES = {
 
 function Sidebar() {
   const { user } = useUserSettings();
+  const { isAuthenticated } = useAuth();
 
   return (
     <aside className="sidebar">
@@ -74,21 +78,29 @@ function Sidebar() {
           <p>Развивайся. Создавай портфолио. Зарабатывай.</p>
           <Link to="/how-it-works" className="sidebar-promo-link">Как это работает</Link>
         </div>
+
       </div>
 
       <div className="sidebar-footer">
-        <div className="sidebar-user-block">
-          <NavLink to="/profile" className="profile-card">
-            <div className="profile-avatar">{user.name.charAt(0)}</div>
-            <div className="profile-info">
-              <span className="profile-name">{user.name}</span>
-              <span className="profile-role">{user.role}</span>
-            </div>
-          </NavLink>
-          <NavLink to="/settings" className="profile-settings-btn" aria-label="Настройки">
-            <SettingsIcon />
-          </NavLink>
-        </div>
+        {isAuthenticated ? (
+          <div className="sidebar-user-block">
+            <NavLink to="/profile" className="profile-card">
+              <div className="profile-avatar">{user.name.charAt(0)}</div>
+              <div className="profile-info">
+                <span className="profile-name">{user.name}</span>
+                <span className="profile-role">{user.role}</span>
+              </div>
+            </NavLink>
+            <NavLink to="/settings" className="profile-settings-btn" aria-label="Настройки">
+              <SettingsIcon />
+            </NavLink>
+          </div>
+        ) : (
+          <div className="sidebar-auth-block">
+            <Link to="/login" className="sidebar-auth-btn sidebar-auth-btn--primary">Войти</Link>
+            <Link to="/register" className="sidebar-auth-btn">Регистрация</Link>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -108,7 +120,12 @@ function TopBar() {
 
 function App() {
   const { pathname } = useLocation();
+  const isAccess = pathname === '/access';
+  const isAuth = pathname === '/login' || pathname === '/register';
+  const isAdminShell = pathname.startsWith('/company') || pathname.startsWith('/admin');
   const isChat = pathname === '/chat';
+  const isSkillMate = pathname === '/skillmate';
+  const isMateAI = pathname === '/mateai';
   const isHome = pathname === '/';
   const isTasks = pathname === '/tasks';
   const isTeam = pathname === '/team';
@@ -116,16 +133,46 @@ function App() {
   const isProfile = pathname === '/profile';
   const isSettings = pathname === '/settings';
   const isHowItWorks = pathname === '/how-it-works';
+  const isNotifications = pathname === '/notifications';
+  const isHelp = pathname === '/help';
+  const isPublic = pathname.startsWith('/companies/') || pathname.startsWith('/users/');
   const isTaskDetail = /^\/tasks\/\d+$/.test(pathname);
   const isFullWidth = isHome || isTasks || isTeam || isLabSkill || isProfile
-    || isSettings || isHowItWorks || isTaskDetail;
+    || isSettings || isHowItWorks || isTaskDetail || isNotifications || isHelp || isPublic;
+
+  if (isAccess || isAuth) {
+    return (
+      <div className={`app${isAuth ? ' app--auth' : ' app--access'}`}>
+        <AppRouter />
+      </div>
+    );
+  }
+
+  if (isAdminShell) {
+    return (
+      <div className="app app--admin">
+        <main className="content content--admin">
+          <AppRouter />
+        </main>
+      </div>
+    );
+  }
+
+  if (isMateAI) {
+    return (
+      <div className="app app--mateai-standalone">
+        <AppRouter />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
+      <AuthSync />
       <Sidebar />
       <div className="main-wrap">
-        {!isChat && !isFullWidth && <TopBar />}
-        <main className={`content${isChat ? ' content--chat' : ''}${isFullWidth ? ' content--home' : ''}`}>
+        {!isChat && !isSkillMate && !isFullWidth && <TopBar />}
+        <main className={`content${isChat || isSkillMate ? ' content--chat' : ''}${isSkillMate ? ' content--skillmate' : ''}${isFullWidth ? ' content--home' : ''}`}>
           <AppRouter />
         </main>
       </div>
