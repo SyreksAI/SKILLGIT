@@ -1,5 +1,6 @@
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useCompanyAdmin } from '../../context/CompanyAdminContext';
+import { useAuth } from '../../context/AuthContext';
 import { AdminShell } from '../admin/AdminShell';
 import { CrmTopBar } from '../crm/CrmShared';
 import {
@@ -46,7 +47,23 @@ const IconChart = () => (
 );
 
 export function CompanyAdminLayout() {
-    const { company, stats, crmSearch, setCrmSearch } = useCompanyAdmin();
+    const {
+        company,
+        stats,
+        crmSearch,
+        setCrmSearch,
+        workspaceReady,
+        workspaceLoading,
+        workspaceError,
+        reloadWorkspace,
+    } = useCompanyAdmin();
+    const { user, accessToken } = useAuth();
+    const location = useLocation();
+
+    if (!accessToken || !user) {
+        return <Navigate to="/login?accountType=customer" replace state={{ from: location }} />;
+    }
+    if (user.accountType !== 'customer') return <Navigate to="/" replace />;
 
     const navItems = [
         { to: 'dashboard', label: 'Обзор', Icon: GridIcon },
@@ -64,6 +81,7 @@ export function CompanyAdminLayout() {
 
     return (
         <AdminShell
+            className="admin-app--crm"
             brandName={company.name}
             brandSubtitle="CRM · SKILLGIT for Business"
             brandColor={company.color}
@@ -79,7 +97,31 @@ export function CompanyAdminLayout() {
                     </span>
                 )}
             />
-            <Outlet />
+            {!workspaceReady ? (
+                <div className="admin-page" aria-live="polite">
+                    {workspaceLoading ? (
+                        <p className="admin-empty-text" role="status">Загружаем данные CRM…</p>
+                    ) : (
+                        <div className="admin-card">
+                            <p className="auth-error" role="alert">
+                                Данные CRM пока недоступны. Повторная загрузка выполняется автоматически.
+                            </p>
+                            <button type="button" className="admin-btn admin-btn--primary" onClick={reloadWorkspace}>
+                                Повторить сейчас
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <>
+                    {workspaceError && (
+                        <p className="auth-error" role="alert">
+                            Связь с CRM временно потеряна. Показываем последние данные и повторяем загрузку.
+                        </p>
+                    )}
+                    <Outlet />
+                </>
+            )}
         </AdminShell>
     );
 }

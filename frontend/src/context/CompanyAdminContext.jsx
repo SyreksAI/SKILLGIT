@@ -2,32 +2,24 @@ import React, {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
+import { useAuth } from './AuthContext';
+import { api } from '../services/api';
 import {
     APPLICANT_STATUSES,
-    COMPANY_ACTIVITIES,
-    COMPANY_ANALYTICS_TRENDS,
-    COMPANY_APPLICANT_NOTES,
-    COMPANY_APPLICANTS,
-    COMPANY_BILLING,
-    COMPANY_DEALS,
-    COMPANY_MESSAGE_THREADS,
-    COMPANY_MESSAGES,
-    COMPANY_TEAM,
-    DEMO_COMPANY,
     MESSAGE_TEMPLATES,
-    getCompanyTasksFromCatalog,
     getNextStatus,
     getPrevStatus,
 } from '../data/companyAdminData';
 
 const STORAGE_KEY = 'skillgit-company-admin';
 
-function loadStored() {
+function loadStored(key) {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(key);
         return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
@@ -43,24 +35,166 @@ function formatNow() {
 const CompanyAdminContext = createContext(null);
 
 export function CompanyAdminProvider({ children }) {
-    const stored = loadStored();
+    const { user, accessToken } = useAuth();
+    const storageKey = `${STORAGE_KEY}:${user?.id ?? 'guest'}`;
+    const [stored] = useState(() => loadStored(storageKey));
 
-    const [customTasks, setCustomTasks] = useState(stored?.customTasks ?? []);
-    const [applicants, setApplicants] = useState(stored?.applicants ?? COMPANY_APPLICANTS);
-    const [applicantNotes, setApplicantNotes] = useState(stored?.applicantNotes ?? COMPANY_APPLICANT_NOTES);
-    const [deals, setDeals] = useState(stored?.deals ?? COMPANY_DEALS);
-    const [activities, setActivities] = useState(stored?.activities ?? COMPANY_ACTIVITIES);
-    const [team, setTeam] = useState(stored?.team ?? COMPANY_TEAM);
-    const [messages, setMessages] = useState(stored?.messages ?? COMPANY_MESSAGES);
-    const [threads, setThreads] = useState(stored?.threads ?? COMPANY_MESSAGE_THREADS);
-    const [billing, setBilling] = useState(stored?.billing ?? COMPANY_BILLING);
-    const [company, setCompany] = useState(stored?.company ?? DEMO_COMPANY);
+    const [customTasks, setCustomTasks] = useState([]);
+    const [applicants, setApplicants] = useState([]);
+    const [applicantAssignees, setApplicantAssignees] = useState({});
+    const [applicantNotes, setApplicantNotes] = useState({});
+    const [deals, setDeals] = useState([]);
+    const [activities, setActivities] = useState([]);
+    const [team, setTeam] = useState([]);
+    const [messages, setMessages] = useState([]);
+    const [threads, setThreads] = useState({});
+    const [billing, setBilling] = useState([]);
+    const [workspaceReady, setWorkspaceReady] = useState(false);
+    const [workspaceLoading, setWorkspaceLoading] = useState(false);
+    const [workspaceError, setWorkspaceError] = useState('');
+    const [workspaceReloadKey, setWorkspaceReloadKey] = useState(0);
+    const reloadWorkspace = useCallback(() => setWorkspaceReloadKey(key => key + 1), []);
+    const [company, setCompany] = useState(() => ({
+        id: user?.id ?? 'company',
+        name: user?.name ?? 'Моя компания',
+        color: '#3b82f6',
+        industry: '',
+        verified: false,
+        plan: 'Free',
+        balance: 0,
+        email: user?.email ?? '',
+        website: '',
+        description: '',
+        managers: 1,
+        ...(stored?.company ?? {}),
+    }));
     const [crmSearch, setCrmSearch] = useState('');
 
     const persist = useCallback((patch) => {
-        const current = loadStored() ?? {};
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, ...patch }));
-    }, []);
+        const current = loadStored(storageKey) ?? {};
+        localStorage.setItem(storageKey, JSON.stringify({ ...current, ...patch }));
+        if (accessToken && user?.accountType === 'customer') {
+            return api.updateCompanyWorkspace(patch, accessToken)
+                .then(() => null)
+                .catch(error => {
+                    console.error('Не удалось сохранить данные CRM:', error);
+                    return { error };
+                });
+        }
+        return Promise.resolve(null);
+    }, [storageKey, accessToken, user?.accountType]);
+
+    useEffect(() => {
+        const accountData = loadStored(storageKey) ?? {};
+        setCompany(prev => ({
+            id: user?.id ?? 'company',
+            name: user?.name ?? 'Моя компания',
+            color: '#3b82f6',
+            industry: '',
+            verified: false,
+            plan: 'Free',
+            balance: 0,
+            email: user?.email ?? '',
+            website: '',
+            description: '',
+            managers: 1,
+            ...accountData.company,
+        }));
+        setApplicantNotes(accountData.applicantNotes ?? {});
+        setDeals(accountData.deals ?? []);
+        setActivities(accountData.activities ?? []);
+        setTeam(accountData.team ?? []);
+        setMessages(accountData.messages ?? []);
+        setThreads(accountData.threads ?? {});
+        setBilling(accountData.billing ?? []);
+    }, [storageKey, user?.email, user?.name, user?.id]);
+
+    useEffect(() => {
+        if (!accessToken || user?.accountType !== 'customer') {
+            setCustomTasks([]);
+            setApplicants([]);
+            setWorkspaceReady(false);
+            setWorkspaceLoading(false);
+            setWorkspaceError('');
+            return undefined;
+        }
+        let cancelled = false;
+        let hasLoaded = false;
+        let retryTimer;
+        let retryDelay = 2000;
+        setWorkspaceReady(false);
+        setWorkspaceLoading(true);
+        setWorkspaceError('');
+
+        async function refreshWorkspace() {
+            try {
+                const [nextTasks, applicantsFromApi, workspace] = await Promise.all([
+                    api.getCompanyTasks(accessToken),
+                    api.getCompanyApplicants(accessToken),
+                    api.getCompanyWorkspace(accessToken),
+                ]);
+                if (cancelled) return;
+                const nextApplicants = applicantsFromApi.map(applicant => ({
+                    ...applicant,
+                    assigneeId: workspace.applicantAssignees?.[applicant.id] ?? applicant.assigneeId,
+                }));
+                setCustomTasks(nextTasks);
+                setApplicants(nextApplicants);
+                setApplicantAssignees(workspace.applicantAssignees ?? {});
+                setCompany(workspace.company);
+                setApplicantNotes(workspace.applicantNotes ?? {});
+                setDeals(workspace.deals ?? []);
+                setActivities(workspace.activities ?? []);
+                setTeam(workspace.team ?? []);
+                setMessages(workspace.messages ?? []);
+                setThreads(workspace.threads ?? {});
+                setBilling(workspace.billing ?? []);
+                hasLoaded = true;
+                setWorkspaceReady(true);
+                setWorkspaceLoading(false);
+                setWorkspaceError('');
+                retryDelay = 2000;
+                window.clearTimeout(retryTimer);
+                retryTimer = undefined;
+            } catch (error) {
+                if (!cancelled) {
+                    setWorkspaceError(error.message || 'Не удалось загрузить данные CRM');
+                    if (!hasLoaded) setWorkspaceLoading(false);
+                }
+                throw error;
+            }
+        }
+
+        let refreshTimer;
+        function scheduleRetry() {
+            if (cancelled || retryTimer) return;
+            retryTimer = window.setTimeout(() => {
+                retryTimer = undefined;
+                refreshWorkspace().catch(error => {
+                    console.error('Не удалось загрузить данные CRM:', error);
+                    retryDelay = Math.min(retryDelay * 2, 30000);
+                    scheduleRetry();
+                });
+            }, retryDelay);
+        }
+        function handleRefreshError(error) {
+            console.error('Не удалось обновить CRM:', error);
+            scheduleRetry();
+        }
+
+        refreshWorkspace().catch(handleRefreshError);
+        const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${scheme}//${window.location.host}/ws/company`);
+        socket.addEventListener('open', () => socket.send(JSON.stringify({ token: accessToken })));
+        socket.addEventListener('message', () => refreshWorkspace().catch(handleRefreshError));
+        refreshTimer = window.setInterval(() => refreshWorkspace().catch(handleRefreshError), 30000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(refreshTimer);
+            window.clearTimeout(retryTimer);
+            socket.close();
+        };
+    }, [accessToken, user?.accountType, workspaceReloadKey]);
 
     const logActivity = useCallback((entry) => {
         const item = { id: Date.now(), time: 'только что', ...entry };
@@ -71,15 +205,32 @@ export function CompanyAdminProvider({ children }) {
         });
     }, [persist]);
 
-    const tasks = useMemo(() => {
-        const catalog = getCompanyTasksFromCatalog(company.name);
-        const merged = [...customTasks, ...catalog.filter(
-            ct => !customTasks.some(t => t.id === ct.id),
-        )];
-        return merged.sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
-    }, [company.name, customTasks]);
+    const tasks = customTasks;
 
     const stats = useMemo(() => {
+        const applicationTrend = Array(12).fill(0);
+        const spendTrend = Array(12).fill(0);
+        const now = new Date();
+        applicants.forEach(applicant => {
+            const [day, month, year] = (applicant.appliedAt ?? '').split('.').map(Number);
+            const appliedAt = applicant.createdAt
+                ? new Date(applicant.createdAt).getTime()
+                : day && month && year ? new Date(year, month - 1, day).getTime() : Date.now();
+            const createdAt = new Date(Number.isNaN(appliedAt) ? Date.now() : appliedAt);
+            const monthsAgo = (now.getFullYear() - createdAt.getFullYear()) * 12
+                + now.getMonth() - createdAt.getMonth();
+            if (monthsAgo >= 0 && monthsAgo < applicationTrend.length) {
+                applicationTrend[applicationTrend.length - monthsAgo - 1] += 1;
+            }
+        });
+        billing.forEach(entry => {
+            if (entry.amount >= 0) return;
+            const date = entry.createdAt ? new Date(entry.createdAt) : new Date();
+            const monthsAgo = (now.getFullYear() - date.getFullYear()) * 12 + now.getMonth() - date.getMonth();
+            if (monthsAgo >= 0 && monthsAgo < spendTrend.length) {
+                spendTrend[spendTrend.length - monthsAgo - 1] += Math.abs(entry.amount);
+            }
+        });
         const pipeline = APPLICANT_STATUSES.filter(s => s.id !== 'rejected').map(st => ({
             ...st,
             count: applicants.filter(a => a.status === st.id).length,
@@ -91,16 +242,21 @@ export function CompanyAdminProvider({ children }) {
             newApplicants: applicants.filter(a => a.status === 'new').length,
             inInterview: applicants.filter(a => a.status === 'interview').length,
             hired: applicants.filter(a => a.status === 'hired').length,
-            activeDeals: deals.filter(d => d.status === 'active').length,
+            activeDeals: deals.filter(d => ['planning', 'active', 'in_review', 'revision'].includes(d.status)).length,
             unreadMessages: messages.reduce((s, m) => s + (m.unread ?? 0), 0),
             balance: company.balance,
             conversion: applicants.length
                 ? Math.round((applicants.filter(a => a.status === 'hired').length / applicants.length) * 100)
                 : 0,
             pipeline,
-            trends: COMPANY_ANALYTICS_TRENDS,
+            trends: {
+                applications: applicationTrend,
+                hires: Array(12).fill(0),
+                spend: spendTrend,
+                conversion: Array(12).fill(0),
+            },
         };
-    }, [tasks, applicants, deals, messages, company.balance]);
+    }, [tasks, applicants, deals, messages, billing, company.balance]);
 
     const filteredApplicants = useMemo(() => {
         const q = crmSearch.trim().toLowerCase();
@@ -113,78 +269,47 @@ export function CompanyAdminProvider({ children }) {
         );
     }, [applicants, crmSearch]);
 
-    const createTask = useCallback((payload) => {
-        const task = {
-            id: Date.now(),
-            company: company.name,
-            companyColor: company.color,
-            direction: payload.direction,
-            badge: { text: payload.status === 'draft' ? 'Черновик' : 'Новое', kind: 'new' },
-            verified: company.verified,
-            highPay: Number(payload.price) >= 15000,
-            title: payload.title,
-            desc: payload.desc,
-            fullDesc: payload.fullDesc || payload.desc,
-            tags: payload.tags ?? [],
+    const createTask = useCallback(async (payload) => {
+        const task = await api.createCompanyTask({
+            ...payload,
             price: Number(payload.price),
-            priceLabel: `${Number(payload.price).toLocaleString('ru-RU')} ₽`,
             days: Number(payload.days),
-            daysLabel: `${payload.days} дн.`,
-            applicants: 0,
-            level: payload.level || 'junior',
-            postedAt: 'только что',
-            status: payload.status || 'published',
-            statusLabel: payload.status === 'draft' ? 'Черновик' : 'Опубликовано',
-            views: 0,
-            conversions: 0,
-            source: 'custom',
-            assigneeId: payload.assigneeId ?? 1,
-        };
-        setCustomTasks(prev => {
-            const next = [task, ...prev];
-            persist({ customTasks: next });
-            return next;
-        });
-        logActivity({ type: 'task', text: `Создано задание «${task.title}»`, actor: 'HR' });
+        }, accessToken);
+        setCustomTasks(prev => [task, ...prev]);
+        logActivity({ type: 'task', text: `Создано задание «${task.title}»`, actor: user?.name ?? 'Заказчик' });
         return task;
-    }, [company, persist, logActivity]);
+    }, [accessToken, logActivity, user?.name]);
 
-    const updateTask = useCallback((taskId, patch) => {
-        setCustomTasks(prev => {
-            const next = prev.map(t => (t.id === taskId ? { ...t, ...patch } : t));
-            persist({ customTasks: next });
-            return next;
-        });
-    }, [persist]);
+    const updateTask = useCallback(async (taskId, patch) => {
+        const updated = await api.updateCompanyTask(taskId, patch.status, accessToken);
+        setCustomTasks(prev => prev.map(task => task.id === updated.id ? updated : task));
+        return updated;
+    }, [accessToken]);
 
     const closeTask = useCallback((taskId) => {
-        updateTask(taskId, { status: 'closed', statusLabel: 'Закрыто' });
-        logActivity({ type: 'task', text: 'Задание закрыто', actor: 'HR' });
-    }, [updateTask, logActivity]);
+        updateTask(taskId, { status: 'closed' }).catch(error => console.error(error));
+    }, [updateTask]);
 
     const pauseTask = useCallback((taskId) => {
-        updateTask(taskId, { status: 'paused', statusLabel: 'На паузе' });
+        updateTask(taskId, { status: 'paused' }).catch(error => console.error(error));
     }, [updateTask]);
 
     const publishTask = useCallback((taskId) => {
-        updateTask(taskId, { status: 'published', statusLabel: 'Опубликовано' });
+        updateTask(taskId, { status: 'published' }).catch(error => console.error(error));
     }, [updateTask]);
 
-    const updateApplicantStatus = useCallback((applicantId, status) => {
+    const updateApplicantStatus = useCallback(async (applicantId, status) => {
+        let updated;
+        try {
+            updated = await api.updateCompanyApplicant(applicantId, status, accessToken);
+        } catch (error) {
+            console.error('Не удалось обновить этап отклика:', error);
+            return;
+        }
         setApplicants(prev => {
-            const target = prev.find(a => a.id === applicantId);
-            const next = prev.map(a => (a.id === applicantId ? { ...a, status } : a));
-            persist({ applicants: next });
-            if (target) {
-                logActivity({
-                    type: 'status',
-                    text: `${target.userName} → «${APPLICANT_STATUSES.find(s => s.id === status)?.label}»`,
-                    actor: 'CRM',
-                });
-            }
-            return next;
+            return prev.map(a => (a.id === applicantId ? updated : a));
         });
-    }, [persist, logActivity]);
+    }, [accessToken]);
 
     const moveApplicantNext = useCallback((applicantId) => {
         const applicant = applicants.find(a => a.id === applicantId);
@@ -201,120 +326,97 @@ export function CompanyAdminProvider({ children }) {
     }, [applicants, updateApplicantStatus]);
 
     const assignApplicant = useCallback((applicantId, assigneeId) => {
+        api.updateCompanyApplicant(applicantId, { assigneeId }, accessToken)
+            .catch(error => console.error('Не удалось назначить ответственного:', error));
         setApplicants(prev => {
             const next = prev.map(a => (a.id === applicantId ? { ...a, assigneeId } : a));
-            persist({ applicants: next });
             return next;
         });
-    }, [persist]);
+        setApplicantAssignees(prev => ({ ...prev, [applicantId]: assigneeId }));
+        logActivity({ type: 'team', text: 'Изменён ответственный за кандидата', actor: user?.name ?? 'Заказчик' });
+    }, [accessToken, logActivity, user?.name]);
 
-    const addApplicantNote = useCallback((applicantId, text, author = 'Мария Н.') => {
+    const addApplicantNote = useCallback((applicantId, text, author = user?.name ?? 'Заказчик') => {
         const note = { id: Date.now(), author, text, date: formatNow() };
         setApplicantNotes(prev => {
             const next = { ...prev, [applicantId]: [...(prev[applicantId] ?? []), note] };
             persist({ applicantNotes: next });
             return next;
         });
-    }, [persist]);
+    }, [persist, user?.name]);
 
-    const createDealFromApplicant = useCallback((applicantId, amount) => {
+    const createDealFromApplicant = useCallback(async (applicantId, amount, milestones) => {
         const applicant = applicants.find(a => a.id === applicantId);
         if (!applicant) return null;
-        updateApplicantStatus(applicantId, 'hired');
-        const deal = {
-            id: Date.now(),
-            applicantId,
-            taskId: applicant.taskId,
-            taskTitle: applicant.taskTitle,
-            candidateName: applicant.userName,
-            username: applicant.username,
-            amount: Number(amount),
-            paid: 0,
-            status: 'active',
-            progress: 0,
-            deadline: '—',
-            milestone: 'Старт работы',
-            createdAt: formatNow(),
-        };
-        setDeals(prev => {
-            const next = [deal, ...prev];
-            persist({ deals: next });
-            return next;
-        });
-        logActivity({ type: 'deal', text: `Сделка с ${applicant.userName} на ${amount.toLocaleString('ru-RU')} ₽`, actor: 'HR' });
+        const deal = await api.createCompanyDeal(applicantId, Number(amount), milestones, accessToken);
+        setDeals(prev => [deal, ...prev.filter(existing => existing.id !== deal.id)]);
+        setApplicants(prev => prev.map(item => item.id === applicantId ? { ...item, status: 'hired' } : item));
         return deal;
-    }, [applicants, updateApplicantStatus, persist, logActivity]);
+    }, [accessToken, applicants]);
 
-    const payDeal = useCallback((dealId, amount) => {
-        setDeals(prev => {
-            const next = prev.map(d => {
-                if (d.id !== dealId) return d;
-                const paid = d.paid + amount;
-                const progress = Math.min(100, Math.round((paid / d.amount) * 100));
-                return {
-                    ...d,
-                    paid,
-                    progress,
-                    status: paid >= d.amount ? 'completed' : d.status,
-                };
-            });
-            persist({ deals: next });
-            return next;
-        });
-        setCompany(prev => {
-            const next = { ...prev, balance: prev.balance - amount };
-            persist({ company: next });
-            return next;
-        });
-        const entry = {
-            id: Date.now(),
-            date: formatNow(),
-            title: `Выплата по сделке #${dealId}`,
-            amount: -amount,
-            type: 'payout',
-            dealId,
-        };
-        setBilling(prev => {
-            const next = [entry, ...prev];
-            persist({ billing: next });
-            return next;
-        });
-        logActivity({ type: 'deal', text: `Выплата ${amount.toLocaleString('ru-RU')} ₽ по сделке`, actor: 'Финансы' });
-    }, [persist, logActivity]);
+    const reviewDealMilestone = useCallback(async (dealId, milestoneId, decision, feedback = '') => {
+        const result = await api.reviewCompanyMilestone(dealId, milestoneId, decision, feedback, accessToken);
+        setDeals(prev => prev.map(deal => deal.id === dealId ? result.deal : deal));
+        setCompany(result.company);
+        setBilling(result.billing);
+        return result;
+    }, [accessToken]);
 
-    const sendCompanyMessage = useCallback((threadId, text) => {
-        const entry = { id: Date.now(), from: 'me', text, time: 'сейчас' };
+    const reviewCompletedDeal = useCallback(async (dealId, rating, text) => {
+        const deal = await api.reviewCompletedDeal(dealId, rating, text, accessToken);
+        setDeals(prev => prev.map(item => item.id === dealId ? deal : item));
+        return deal;
+    }, [accessToken]);
+
+    const payDeal = useCallback(async (dealId, amount) => {
+        const result = await api.payCompanyDeal(dealId, Number(amount), accessToken);
+        setDeals(prev => prev.map(deal => deal.id === dealId ? result.deal : deal));
+        setCompany(result.company);
+        setBilling(result.billing);
+        return result;
+    }, [accessToken]);
+
+    const sendCompanyMessage = useCallback(async (threadId, text) => {
+        let entry;
+        try {
+            entry = await api.sendMessage(threadId, text, accessToken);
+        } catch (error) {
+            console.error('Не удалось отправить сообщение:', error);
+            throw error;
+        }
         setThreads(prev => {
             const next = { ...prev, [threadId]: [...(prev[threadId] ?? []), entry] };
-            persist({ threads: next });
             return next;
         });
         setMessages(prev => {
             const next = prev.map(m =>
-                m.id === threadId ? { ...m, lastMessage: text, time: 'сейчас', unread: 0 } : m,
+                m.id === threadId ? { ...m, lastMessage: text, time: entry.time, unread: 0 } : m,
             );
-            persist({ messages: next });
             return next;
         });
-    }, [persist]);
+    }, [accessToken]);
 
     const markThreadRead = useCallback((threadId) => {
+        api.getMessages(threadId, accessToken)
+            .then(thread => setThreads(prev => ({ ...prev, [threadId]: thread })))
+            .catch(error => console.error('Не удалось загрузить переписку:', error));
         setMessages(prev => {
             const next = prev.map(m => (m.id === threadId ? { ...m, unread: 0 } : m));
-            persist({ messages: next });
             return next;
         });
-    }, [persist]);
+    }, [accessToken]);
 
     const togglePinThread = useCallback((threadId) => {
+        const pinned = !messages.find(item => item.id === threadId)?.pinned;
+        api.updateCompanyMessageThread(threadId, pinned, accessToken)
+            .catch(error => console.error('Не удалось закрепить диалог:', error));
         setMessages(prev => {
             const next = prev.map(m =>
-                m.id === threadId ? { ...m, pinned: !m.pinned } : m,
+                m.id === threadId ? { ...m, pinned } : m,
             );
-            persist({ messages: next });
             return next;
         });
-    }, [persist]);
+    }, [accessToken, messages]);
 
     const addTeamMember = useCallback((member) => {
         setTeam(prev => {
@@ -322,7 +424,8 @@ export function CompanyAdminProvider({ children }) {
             persist({ team: next });
             return next;
         });
-    }, [persist]);
+        logActivity({ type: 'team', text: `${member.name} добавлен(а) в список HR-команды`, actor: user?.name ?? 'Заказчик' });
+    }, [persist, logActivity, user?.name]);
 
     const removeTeamMember = useCallback((memberId) => {
         setTeam(prev => {
@@ -330,38 +433,28 @@ export function CompanyAdminProvider({ children }) {
             persist({ team: next });
             return next;
         });
-    }, [persist]);
+        logActivity({ type: 'team', text: 'Сотрудник удалён из списка HR-команды', actor: user?.name ?? 'Заказчик' });
+    }, [persist, logActivity, user?.name]);
 
     const updateCompany = useCallback((patch) => {
-        setCompany(prev => {
-            const next = { ...prev, ...patch };
-            persist({ company: next });
-            return next;
-        });
-    }, [persist]);
+        const next = { ...company, ...patch };
+        setCompany(next);
+        return persist({ company: next });
+    }, [company, persist]);
 
-    const topUpBalance = useCallback((amount) => {
-        setCompany(prev => {
-            const next = { ...prev, balance: prev.balance + amount };
-            persist({ company: next });
-            return next;
-        });
-        const entry = {
-            id: Date.now(),
-            date: formatNow(),
-            title: 'Пополнение баланса компании',
-            amount,
-            type: 'topup',
-        };
-        setBilling(prev => {
-            const next = [entry, ...prev];
-            persist({ billing: next });
-            return next;
-        });
-    }, [persist]);
+    const topUpBalance = useCallback(async (amount) => {
+        const result = await api.topUpCompanyBalance(Number(amount), accessToken);
+        setCompany(result.company);
+        setBilling(result.billing);
+        return result;
+    }, [accessToken]);
 
     const value = useMemo(() => ({
         company,
+        workspaceReady,
+        workspaceLoading,
+        workspaceError,
+        reloadWorkspace,
         tasks,
         applicants,
         filteredApplicants,
@@ -387,6 +480,8 @@ export function CompanyAdminProvider({ children }) {
         assignApplicant,
         addApplicantNote,
         createDealFromApplicant,
+        reviewDealMilestone,
+        reviewCompletedDeal,
         payDeal,
         sendCompanyMessage,
         markThreadRead,
@@ -397,11 +492,11 @@ export function CompanyAdminProvider({ children }) {
         topUpBalance,
         logActivity,
     }), [
-        company, tasks, applicants, filteredApplicants, applicantNotes, deals, activities,
+        company, workspaceReady, workspaceLoading, workspaceError, reloadWorkspace, tasks, applicants, filteredApplicants, applicantNotes, deals, activities,
         team, messages, threads, billing, stats, crmSearch,
         createTask, updateTask, closeTask, pauseTask, publishTask,
         updateApplicantStatus, moveApplicantNext, moveApplicantPrev, assignApplicant,
-        addApplicantNote, createDealFromApplicant, payDeal,
+        addApplicantNote, createDealFromApplicant, reviewDealMilestone, reviewCompletedDeal, payDeal,
         sendCompanyMessage, markThreadRead, togglePinThread,
         addTeamMember, removeTeamMember, updateCompany, topUpBalance, logActivity,
     ]);

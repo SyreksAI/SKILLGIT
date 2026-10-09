@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCompanyAdmin } from '../../context/CompanyAdminContext';
 import { AdminPanelHead } from '../admin/AdminShell';
 
@@ -12,10 +12,26 @@ export function CompanySettingsPage() {
         industry: company.industry,
     });
     const [saved, setSaved] = useState(false);
+    const [error, setError] = useState('');
 
-    function handleSave(e) {
+    useEffect(() => {
+        setForm({
+            name: company.name,
+            email: company.email,
+            website: company.website,
+            description: company.description,
+            industry: company.industry,
+        });
+    }, [company.name, company.email, company.website, company.description, company.industry]);
+
+    async function handleSave(e) {
         e.preventDefault();
-        updateCompany(form);
+        setError('');
+        const result = await updateCompany(form);
+        if (result?.error) {
+            setError(result.error.message || 'Не удалось сохранить настройки');
+            return;
+        }
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     }
@@ -29,6 +45,7 @@ export function CompanySettingsPage() {
                     <span>Название</span>
                     <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                 </label>
+                {error && <p className="auth-error" role="alert">{error}</p>}
                 <label className="admin-field">
                     <span>Отрасль</span>
                     <input value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} />

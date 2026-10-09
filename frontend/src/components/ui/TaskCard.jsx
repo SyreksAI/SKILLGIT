@@ -3,6 +3,8 @@ import { companySlugFromName } from '../../data/companyAdminData';
 import { ClockIcon } from '../pages/icons';
 
 export function TaskCard({ task, onApply }) {
+    const companySlug = task.companySlug || companySlugFromName(task.company);
+
     return (
         <article className="home-task-card">
             <div className="home-task-head">
@@ -10,7 +12,7 @@ export function TaskCard({ task, onApply }) {
                     <span className="home-task-logo" style={{ background: task.companyColor }}>
                         {task.company.charAt(0)}
                     </span>
-                    <Link to={`/companies/${companySlugFromName(task.company)}`} className="home-task-company-name">
+                    <Link to={`/companies/${companySlug}`} className="home-task-company-name">
                         {task.company}
                     </Link>
                 </div>

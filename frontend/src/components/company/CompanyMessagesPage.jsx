@@ -17,6 +17,7 @@ export function CompanyMessagesPage() {
     const threadParam = Number(searchParams.get('thread'));
     const [activeId, setActiveId] = useState(threadParam || messages[0]?.id);
     const [draft, setDraft] = useState('');
+    const [sendError, setSendError] = useState('');
     const bottomRef = useRef(null);
 
     const sortedMessages = useMemo(() =>
@@ -31,6 +32,10 @@ export function CompanyMessagesPage() {
     }, [threadParam]);
 
     useEffect(() => {
+        if (!activeId && messages.length) setActiveId(messages[0].id);
+    }, [activeId, messages]);
+
+    useEffect(() => {
         if (activeId) markThreadRead(activeId);
     }, [activeId, markThreadRead]);
 
@@ -38,11 +43,16 @@ export function CompanyMessagesPage() {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [thread.length]);
 
-    function handleSend(e) {
+    async function handleSend(e) {
         e.preventDefault();
         if (!draft.trim() || !activeId) return;
-        sendCompanyMessage(activeId, draft.trim());
-        setDraft('');
+        setSendError('');
+        try {
+            await sendCompanyMessage(activeId, draft.trim());
+            setDraft('');
+        } catch (error) {
+            setSendError(error.message || 'Не удалось отправить сообщение');
+        }
     }
 
     function applyTemplate(text) {
@@ -92,7 +102,7 @@ export function CompanyMessagesPage() {
                             <div className="crm-message-templates">
                                 {messageTemplates.map(t => (
                                     <button key={t.id} type="button" className="crm-template-chip" onClick={() => applyTemplate(t.text)}>
-                                        {t.label}
+                                        {t.title}
                                     </button>
                                 ))}
                             </div>
@@ -116,6 +126,7 @@ export function CompanyMessagesPage() {
                                     <SendIcon />
                                 </button>
                             </form>
+                            {sendError && <p className="auth-error" role="alert">{sendError}</p>}
                         </>
                     ) : (
                         <div className="admin-empty">Выберите диалог</div>

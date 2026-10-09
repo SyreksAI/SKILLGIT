@@ -24,15 +24,11 @@ export function CompanyAnalyticsPage() {
             <AdminPanelHead title="Аналитика" subtitle="Тренды, воронка и эффективность расходов" />
 
             <div className="admin-stats-grid">
-                <AdminStatCard label="Опубликовано задач" value={tasks.filter(t => t.status !== 'closed').length}>
-                    <CrmSparkline data={trends.applications.slice(-8)} />
-                </AdminStatCard>
+                <AdminStatCard label="Опубликовано задач" value={tasks.filter(t => t.status === 'published').length} />
                 <AdminStatCard label="Всего откликов" value={applicants.length} accent="blue">
                     <CrmSparkline data={trends.applications} color="#0066e0" />
                 </AdminStatCard>
-                <AdminStatCard label="Конверсия в найм" value={`${stats.conversion}%`} accent="green">
-                    <CrmSparkline data={trends.conversion} color="#22c55e" />
-                </AdminStatCard>
+                <AdminStatCard label="Конверсия в найм" value={`${stats.conversion}%`} accent="green" />
                 <AdminStatCard label="Потрачено" value={`${totalSpent.toLocaleString('ru-RU')} ₽`} hint={`средняя сделка ${avgDeal.toLocaleString('ru-RU')} ₽`} />
             </div>
 
@@ -41,14 +37,18 @@ export function CompanyAnalyticsPage() {
                     <h2>Отклики по месяцам</h2>
                     <CrmBarChart
                         data={trends.applications}
-                        labels={['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'].slice(-trends.applications.length)}
+                        labels={Array.from({ length: 12 }, (_, index) => {
+                            const date = new Date();
+                            date.setMonth(date.getMonth() - 11 + index);
+                            return date.toLocaleDateString('ru-RU', { month: 'short' });
+                        })}
                         height={160}
                     />
                 </section>
 
                 <section className="admin-card">
-                    <h2>Конверсия %</h2>
-                    <CrmBarChart data={trends.conversion} color="#22c55e" height={160} />
+                    <h2>Кандидаты по этапам</h2>
+                    <CrmBarChart data={funnel.map(step => step.count)} labels={funnel.map(step => step.label)} color="#22c55e" height={160} />
                 </section>
             </div>
 
@@ -75,7 +75,7 @@ export function CompanyAnalyticsPage() {
                             <li key={task.id} className="admin-list-item">
                                 <div className="admin-list-body">
                                     <strong>{task.title}</strong>
-                                    <span>{task.applicants ?? 0} откликов · {task.views ?? 0} просмотров</span>
+                                    <span>{task.applicants ?? 0} откликов</span>
                                 </div>
                             </li>
                         ))}

@@ -34,20 +34,30 @@ export function SettingsPage() {
     const navigate = useNavigate();
     const { user: authUser, logout } = useAuth();
     const [section, setSection] = useSearchParam('section', 'public', SECTION_IDS);
-    const { user, profile, notifications, saveProfile, toggleNotification, getDirectionLabel } = useUserSettings();
+    const { user, profile, profileLoading, profileError, notifications, saveProfile, toggleNotification, getDirectionLabel } = useUserSettings();
     const [draft, setDraft] = useState(profile);
     const [saved, setSaved] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
     const { theme, setTheme } = useTheme();
 
     useEffect(() => {
         setDraft(profile);
     }, [profile]);
 
-    function handleSave(e) {
+    async function handleSave(e) {
         e.preventDefault();
-        saveProfile(draft);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        setSaveError('');
+        setSaving(true);
+        try {
+            await saveProfile(draft);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch (error) {
+            setSaveError(error.message || 'Не удалось сохранить профиль');
+        } finally {
+            setSaving(false);
+        }
     }
 
     return (
@@ -101,6 +111,10 @@ export function SettingsPage() {
                                 <p>Эти данные видны в профиле, LabSkill и при откликах на задачи.</p>
                             </div>
 
+                            {(profileError || saveError) && (
+                                <p className="auth-error" role="alert">{saveError || profileError}</p>
+                            )}
+
                             <div className="account-form">
                                 <label className="account-field">
                                     <span>Имя</span>
@@ -118,23 +132,37 @@ export function SettingsPage() {
                                         onChange={e => setDraft({ ...draft, username: e.target.value })}
                                     />
                                 </label>
-                                <label className="account-field">
-                                    <span>Роль / специализация</span>
-                                    <input
-                                        type="text"
-                                        value={draft.role}
-                                        onChange={e => setDraft({ ...draft, role: e.target.value })}
-                                    />
-                                </label>
-                                <div className="account-field">
-                                    <span>Направление</span>
-                                    <GhDropdown
-                                        label={getDirectionLabel(draft.direction)}
-                                        value={draft.direction}
-                                        options={DIRECTION_OPTIONS}
-                                        onChange={direction => setDraft({ ...draft, direction })}
-                                    />
-                                </div>
+                                {draft.accountType === 'performer' && (
+                                    <>
+                                        <label className="account-field">
+                                            <span>Роль / специализация</span>
+                                            <input
+                                                type="text"
+                                                value={draft.role}
+                                                onChange={e => setDraft({ ...draft, role: e.target.value })}
+                                            />
+                                        </label>
+                                        <div className="account-field">
+                                            <span>Направление</span>
+                                            <GhDropdown
+                                                label={getDirectionLabel(draft.direction)}
+                                                value={draft.direction}
+                                                options={DIRECTION_OPTIONS}
+                                                onChange={direction => setDraft({ ...draft, direction })}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                                {draft.accountType === 'customer' && (
+                                    <label className="account-field account-field-full">
+                                        <span>Компания</span>
+                                        <input
+                                            type="text"
+                                            value={draft.company}
+                                            onChange={e => setDraft({ ...draft, company: e.target.value })}
+                                        />
+                                    </label>
+                                )}
                                 <label className="account-field account-field-full">
                                     <span>О себе</span>
                                     <textarea
@@ -175,8 +203,8 @@ export function SettingsPage() {
                             </div>
 
                             <div className="account-actions">
-                                <button type="submit" className="account-save-btn">
-                                    {saved ? 'Сохранено' : 'Сохранить'}
+                                <button type="submit" className="account-save-btn" disabled={saving || profileLoading}>
+                                    {saving ? 'Сохранение…' : saved ? 'Сохранено' : 'Сохранить'}
                                 </button>
                             </div>
                         </form>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getStatusMeta } from '../../data/companyAdminData';
 
@@ -94,7 +94,7 @@ export function CrmKanbanCard({ applicant, onOpen, onMoveNext, onMovePrev, team 
                 <span className="admin-list-avatar">{applicant.avatar}</span>
                 <div>
                     <strong>{applicant.userName}</strong>
-                    <span>★ {applicant.rating}</span>
+                    {applicant.rating && <span>★ {applicant.rating}</span>}
                 </div>
             </div>
             <p className="crm-kanban-card-task">{applicant.taskTitle}</p>
@@ -135,14 +135,44 @@ function AddNoteForm({ onAdd }) {
     );
 }
 
+function localDateAfter(days) {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
 export function CrmCandidateDrawer({ applicant, notes, team, onClose, onStatusChange, onAddNote, onAssign, onCreateDeal, basePath = '/company' }) {
     const navigate = useNavigate();
+    const [dealAmount, setDealAmount] = useState(15000);
+    const [dealError, setDealError] = useState('');
+    const [dealSaving, setDealSaving] = useState(false);
+    const [milestones, setMilestones] = useState(() => [{ title: 'Передача готового результата', dueDate: localDateAfter(7) }]);
+    useEffect(() => {
+        setMilestones([{ title: 'Передача готового результата', dueDate: localDateAfter(7) }]);
+        setDealAmount(15000);
+        setDealError('');
+    }, [applicant?.id]);
+
     if (!applicant) return null;
 
     const assignee = team?.find(m => m.id === applicant.assigneeId);
     const repoPath = applicant.labskillRepo?.includes('/')
         ? `/labskill/${applicant.labskillRepo}`
         : null;
+
+    async function handleCreateDeal() {
+        setDealError('');
+        setDealSaving(true);
+        try {
+            await onCreateDeal(applicant.id, dealAmount, milestones);
+            onClose();
+        } catch (error) {
+            setDealError(error.message || 'Не удалось создать сделку');
+        } finally {
+            setDealSaving(false);
+        }
+    }
 
     return (
         <div className="crm-drawer-overlay" onClick={onClose}>
@@ -164,7 +194,7 @@ export function CrmCandidateDrawer({ applicant, notes, team, onClose, onStatusCh
 
                     <div className="crm-drawer-meta">
                         <div><span>Задача</span><strong>{applicant.taskTitle}</strong></div>
-                        <div><span>Рейтинг</span><strong>★ {applicant.rating}</strong></div>
+                        {applicant.rating && <div><span>Рейтинг</span><strong>★ {applicant.rating}</strong></div>}
                         <div><span>Источник</span><strong>{applicant.source}</strong></div>
                         {applicant.interviewAt && <div><span>Интервью</span><strong>{applicant.interviewAt}</strong></div>}
                         {repoPath && (
@@ -209,17 +239,52 @@ export function CrmCandidateDrawer({ applicant, notes, team, onClose, onStatusCh
                 </div>
 
                 <footer className="crm-drawer-foot">
-                    {applicant.status === 'offer' && onCreateDeal && (
-                        <button
-                            type="button"
-                            className="admin-btn admin-btn--primary"
-                            onClick={() => {
-                                onCreateDeal(applicant.id, 15000);
-                                onClose();
-                            }}
-                        >
-                            Сделка · 15 000 ₽
-                        </button>
+                    {['offer', 'hired'].includes(applicant.status) && onCreateDeal && (
+                        <div className="crm-deal-create">
+                            <label className="admin-field">
+                                <span>Сумма сделки</span>
+                                <input aria-label="Сумма сделки" type="number" min="1" value={dealAmount} onChange={event => setDealAmount(Number(event.target.value))} />
+                            </label>
+                            <div className="crm-deal-schedule-head">
+                                <div>
+                                    <strong>Этапы и сроки</strong>
+                                    <span>Сумма разделится между этапами поровну</span>
+                                </div>
+                                <button type="button" className="admin-link" onClick={() => setMilestones(items => [...items, { title: '', dueDate: items.at(-1)?.dueDate || localDateAfter(14) }])}>
+                                    + Этап
+                                </button>
+                            </div>
+                            <div className="crm-deal-schedule-list">
+                                {milestones.map((milestone, index) => (
+                                    <div className="crm-deal-schedule-row" key={index}>
+                                        <input
+                                            aria-label={`Название этапа ${index + 1}`}
+                                            type="text"
+                                            required
+                                            maxLength={120}
+                                            placeholder={`Этап ${index + 1}`}
+                                            value={milestone.title}
+                                            onChange={event => setMilestones(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item))}
+                                        />
+                                        <input
+                                            aria-label={`Срок этапа ${index + 1}`}
+                                            type="date"
+                                            required
+                                            min={localDateAfter(0)}
+                                            value={milestone.dueDate}
+                                            onChange={event => setMilestones(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, dueDate: event.target.value } : item))}
+                                        />
+                                        {milestones.length > 1 && (
+                                            <button type="button" className="crm-deal-stage-remove" aria-label={`Удалить этап ${index + 1}`} onClick={() => setMilestones(items => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <button type="button" className="admin-btn admin-btn--primary" onClick={handleCreateDeal} disabled={dealSaving || dealAmount < 1 || milestones.some(item => !item.title.trim() || !item.dueDate)}>
+                                {dealSaving ? 'Создаём…' : 'Создать сделку'}
+                            </button>
+                            {dealError && <p className="auth-error" role="alert">{dealError}</p>}
+                        </div>
                     )}
                     <button type="button" className="admin-btn admin-btn--ghost" onClick={() => navigate(`${basePath}/messages?thread=${applicant.id}`)}>
                         Написать

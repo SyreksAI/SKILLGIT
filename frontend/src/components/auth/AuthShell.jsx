@@ -1,6 +1,6 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
-export function AuthShell({ title, subtitle, children, footer }) {
+export function AuthShell({ title, subtitle, children, footer, accountType, onAccountTypeChange }) {
     return (
         <div className="auth-page">
             <aside className="auth-panel">
@@ -11,20 +11,24 @@ export function AuthShell({ title, subtitle, children, footer }) {
                     </Link>
                 </div>
 
-                <nav className="auth-menu" aria-label="Вход и регистрация">
-                    <NavLink
-                        to="/login"
-                        className={({ isActive }) => `auth-nav-item${isActive ? ' active' : ''}`}
+                <div className="auth-menu" role="group" aria-label="Тип аккаунта">
+                    <button
+                        type="button"
+                        className={`auth-nav-item${accountType === 'performer' ? ' active' : ''}`}
+                        aria-pressed={accountType === 'performer'}
+                        onClick={() => onAccountTypeChange('performer')}
                     >
-                        Вход
-                    </NavLink>
-                    <NavLink
-                        to="/register"
-                        className={({ isActive }) => `auth-nav-item${isActive ? ' active' : ''}`}
+                        Исполнитель
+                    </button>
+                    <button
+                        type="button"
+                        className={`auth-nav-item${accountType === 'customer' ? ' active' : ''}`}
+                        aria-pressed={accountType === 'customer'}
+                        onClick={() => onAccountTypeChange('customer')}
                     >
-                        Регистрация
-                    </NavLink>
-                </nav>
+                        Заказчик
+                    </button>
+                </div>
 
                 <div className="auth-panel-body">
                     <div className="auth-intro">

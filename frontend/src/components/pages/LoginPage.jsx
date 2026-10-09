@@ -1,26 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '../auth/AuthShell';
 import { useAuth } from '../../context/AuthContext';
-import { useUserSettings } from '../../context/UserSettingsContext';
 import { ArrowRightIcon } from './icons';
 
 export function LoginPage() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login, isAuthenticated } = useAuth();
-    const { updateProfile } = useUserSettings();
+    const [searchParams] = useSearchParams();
+    const { login, isAuthenticated, user } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [accountType, setAccountType] = useState(
+        () => searchParams.get('accountType') === 'customer' ? 'customer' : 'performer',
+    );
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (isAuthenticated) {
-            navigate('/', { replace: true });
+            navigate(user?.accountType === 'customer' ? '/company/dashboard' : '/', { replace: true });
         }
-    }, [isAuthenticated, navigate]);
+    }, [isAuthenticated, navigate, user?.accountType]);
 
     async function handleSubmit(e) {
         e.preventDefault();
@@ -33,14 +35,10 @@ export function LoginPage() {
 
         setLoading(true);
         try {
-            const user = await login(email, password);
-            updateProfile({
-                name: user.name,
-                username: user.username,
-                role: user.role,
-                direction: user.direction,
-            });
-            const redirectTo = location.state?.from?.pathname || '/';
+            const user = await login(email, password, accountType);
+            const redirectTo = user?.accountType === 'customer'
+                ? '/company/dashboard'
+                : location.state?.from?.pathname || '/';
             navigate(redirectTo, { replace: true });
         } catch (err) {
             setError(err.message || 'Не удалось войти');
@@ -51,8 +49,12 @@ export function LoginPage() {
 
     return (
         <AuthShell
+            accountType={accountType}
+            onAccountTypeChange={setAccountType}
             title="С возвращением"
-            subtitle="Войдите, чтобы откликаться на задачи и вести портфолио в LabSkill."
+            subtitle={accountType === 'performer'
+                ? 'Войдите, чтобы откликаться на задачи и развивать портфолио.'
+                : 'Войдите, чтобы публиковать задачи и находить исполнителей.'}
             footer={(
                 <Link to="/" className="auth-back">
                     ← На главную
@@ -97,12 +99,8 @@ export function LoginPage() {
                 </button>
             </form>
 
-            <p className="auth-hint">
-                Демо-аккаунт: <code>ivan.ivanov@mail.ru</code> · пароль <code>demo123</code>
-            </p>
-
             <p className="auth-switch">
-                Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+                Нет аккаунта? <Link to={`/register?accountType=${accountType}`}>Зарегистрироваться</Link>
             </p>
         </AuthShell>
     );

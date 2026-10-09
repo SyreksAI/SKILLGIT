@@ -51,7 +51,7 @@ export function CompanyApplicantsPage() {
             </div>
 
             <div className="admin-card admin-card--flush">
-                <AdminTable columns={['Кандидат', 'Задание', 'Рейтинг', 'Ответственный', 'Статус', '']}>
+                <AdminTable columns={['Кандидат', 'Задание', 'Рейтинг', 'Ответственный', 'Статус', '']} empty={filtered.length ? undefined : 'Отклики на ваши задания появятся здесь.'}>
                     {filtered.map(a => {
                         const assignee = team.find(m => m.id === a.assigneeId);
                         return (
@@ -66,7 +66,7 @@ export function CompanyApplicantsPage() {
                                     </div>
                                 </td>
                                 <td>{a.taskTitle}</td>
-                                <td>★ {a.rating}</td>
+                                <td>{a.rating ? `★ ${a.rating}` : '—'}</td>
                                 <td>{assignee ? assignee.name : '—'}</td>
                                 <td><ApplicantStatusBadge status={a.status} /></td>
                                 <td className="admin-table-actions" onClick={e => e.stopPropagation()}>

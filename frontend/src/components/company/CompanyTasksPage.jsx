@@ -50,7 +50,7 @@ export function CompanyTasksPage() {
             </div>
 
             <div className="admin-card admin-card--flush">
-                <AdminTable columns={['Задание', 'Статус', 'Отклики', 'Бюджет', '']}>
+                <AdminTable columns={['Задание', 'Статус', 'Отклики', 'Бюджет', '']} empty={filtered.length ? undefined : 'Здесь появятся ваши задания. Создайте первое задание, чтобы начать.'}>
                     {filtered.map(task => (
                         <tr key={task.id}>
                             <td>
@@ -111,16 +111,22 @@ export function CompanyTaskNewPage() {
         tags: '',
     });
     const [saved, setSaved] = useState(false);
+    const [error, setError] = useState('');
 
-    function handleSubmit(e, asDraft = false) {
+    async function handleSubmit(e, asDraft = false) {
         e.preventDefault();
-        const task = createTask({
-            ...form,
-            tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-            status: asDraft ? 'draft' : 'published',
-        });
-        setSaved(true);
-        setTimeout(() => navigate(`/company/tasks/${task.id}`), 600);
+        setError('');
+        try {
+            const task = await createTask({
+                ...form,
+                tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+                status: asDraft ? 'draft' : 'published',
+            });
+            setSaved(true);
+            navigate(`/company/tasks/${task.id}`);
+        } catch (submitError) {
+            setError(submitError.message || 'Не удалось сохранить задание');
+        }
     }
 
     return (
@@ -163,6 +169,7 @@ export function CompanyTaskNewPage() {
                     <span>Теги (через запятую)</span>
                     <input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} placeholder="Python, React..." />
                 </label>
+                {error && <p className="auth-error" role="alert">{error}</p>}
                 <div className="admin-form-actions">
                     <Link to="/company/tasks" className="admin-btn admin-btn--ghost">Отмена</Link>
                     <button type="button" className="admin-btn admin-btn--ghost" onClick={e => handleSubmit(e, true)}>
@@ -180,6 +187,7 @@ export function CompanyTaskNewPage() {
 export function CompanyTaskDetailPage() {
     const { id } = useParams();
     const { tasks, applicants, updateApplicantStatus, createDealFromApplicant } = useCompanyAdmin();
+    const [dealError, setDealError] = useState('');
     const task = tasks.find(t => String(t.id) === id);
     const taskApplicants = applicants.filter(a => String(a.taskId) === id);
 
@@ -223,7 +231,7 @@ export function CompanyTaskDetailPage() {
                                         <span className="admin-list-avatar">{a.avatar}</span>
                                         <div className="admin-list-body">
                                             <strong>{a.userName}</strong>
-                                            <span>★ {a.rating} · {a.appliedAt}</span>
+                                        <span>{a.rating ? `★ ${a.rating} · ` : ''}{a.appliedAt}</span>
                                         </div>
                                     </div>
                                     <p className="admin-text-sm">{a.cover}</p>
@@ -237,11 +245,18 @@ export function CompanyTaskDetailPage() {
                                                 <option key={s.id} value={s.id}>{s.label}</option>
                                             ))}
                                         </select>
-                                        {a.status === 'offer' && (
+                                        {['offer', 'hired'].includes(a.status) && (
                                             <button
                                                 type="button"
                                                 className="admin-btn admin-btn--sm admin-btn--primary"
-                                                onClick={() => createDealFromApplicant(a.id, task.price ?? 15000)}
+                                                onClick={async () => {
+                                                    setDealError('');
+                                                    try {
+                                                        await createDealFromApplicant(a.id, task.price ?? 15000);
+                                                    } catch (error) {
+                                                        setDealError(error.message || 'Не удалось создать сделку');
+                                                    }
+                                                }}
                                             >
                                                 Сделка
                                             </button>
@@ -251,6 +266,7 @@ export function CompanyTaskDetailPage() {
                                         </Link>
                                         <Link to={`/users/${a.username}`} className="admin-link">Профиль</Link>
                                     </div>
+                                    {dealError && <p className="auth-error" role="alert">{dealError}</p>}
                                 </li>
                             ))}
                         </ul>

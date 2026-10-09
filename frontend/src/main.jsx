@@ -17,8 +17,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
-        <UserSettingsProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <UserSettingsProvider>
           <NotificationsProvider>
             <LabSkillReposProvider>
               <BalanceProvider>
@@ -32,8 +32,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               </BalanceProvider>
             </LabSkillReposProvider>
           </NotificationsProvider>
-          </AuthProvider>
-        </UserSettingsProvider>
+          </UserSettingsProvider>
+        </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>

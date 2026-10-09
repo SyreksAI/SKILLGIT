@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '../auth/AuthShell';
 import { useAuth } from '../../context/AuthContext';
-import { useUserSettings } from '../../context/UserSettingsContext';
 import { DIRECTIONS } from '../../data/mockData';
 import { ArrowRightIcon } from './icons';
 
 export function RegisterPage() {
     const navigate = useNavigate();
-    const { register, isAuthenticated } = useAuth();
-    const { updateProfile } = useUserSettings();
+    const [searchParams] = useSearchParams();
+    const { register, isAuthenticated, user } = useAuth();
 
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [direction, setDirection] = useState('dev');
+    const [accountType, setAccountType] = useState(
+        () => searchParams.get('accountType') === 'customer' ? 'customer' : 'performer',
+    );
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
@@ -22,9 +24,9 @@ export function RegisterPage() {
 
     useEffect(() => {
         if (isAuthenticated) {
-            navigate('/', { replace: true });
+            navigate(user?.accountType === 'customer' ? '/company/dashboard' : '/', { replace: true });
         }
-    }, [isAuthenticated, navigate]);
+    }, [isAuthenticated, navigate, user?.accountType]);
 
     async function handleSubmit(e) {
         e.preventDefault();
@@ -32,6 +34,11 @@ export function RegisterPage() {
 
         if (!name.trim() || !email.trim() || !password) {
             setError('Заполните все обязательные поля');
+            return;
+        }
+
+        if (password.length < 8) {
+            setError('Пароль должен содержать минимум 8 символов');
             return;
         }
 
@@ -47,15 +54,10 @@ export function RegisterPage() {
                 username,
                 email,
                 password,
-                direction,
+                accountType,
+                ...(accountType === 'performer' ? { direction } : {}),
             });
-            updateProfile({
-                name: user.name,
-                username: user.username,
-                role: user.role,
-                direction: user.direction,
-            });
-            navigate('/', { replace: true });
+            navigate(user?.accountType === 'customer' ? '/company/dashboard' : '/', { replace: true });
         } catch (err) {
             setError(err.message || 'Не удалось зарегистрироваться');
         } finally {
@@ -65,8 +67,12 @@ export function RegisterPage() {
 
     return (
         <AuthShell
+            accountType={accountType}
+            onAccountTypeChange={setAccountType}
             title="Создать аккаунт"
-            subtitle="Присоединяйтесь к SKILLGIT — выполняйте задачи, собирайте портфолио и зарабатывайте."
+            subtitle={accountType === 'performer'
+                ? 'Создайте профиль исполнителя, чтобы находить задачи и показывать свои навыки.'
+                : 'Создайте аккаунт заказчика, чтобы размещать задачи и находить специалистов.'}
             footer={(
                 <Link to="/" className="auth-back">
                     ← На главную
@@ -118,17 +124,19 @@ export function RegisterPage() {
                     />
                 </label>
 
-                <label className="auth-field">
-                    <span>Направление</span>
-                    <select
-                        value={direction}
-                        onChange={e => setDirection(e.target.value)}
-                    >
-                        {DIRECTIONS.map(item => (
-                            <option key={item.id} value={item.id}>{item.label}</option>
-                        ))}
-                    </select>
-                </label>
+                {accountType === 'performer' && (
+                    <label className="auth-field">
+                        <span>Ваше направление</span>
+                        <select
+                            value={direction}
+                            onChange={e => setDirection(e.target.value)}
+                        >
+                            {DIRECTIONS.map(item => (
+                                <option key={item.id} value={item.id}>{item.label}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
 
                 <div className="auth-field-row">
                     <label className="auth-field">
@@ -136,11 +144,12 @@ export function RegisterPage() {
                         <input
                             type="password"
                             value={password}
+                            minLength={8}
                             onChange={e => {
                                 setPassword(e.target.value);
                                 setError('');
                             }}
-                            placeholder="Минимум 6 символов"
+                            placeholder="Минимум 8 символов"
                             autoComplete="new-password"
                         />
                     </label>
@@ -163,7 +172,7 @@ export function RegisterPage() {
                 {error && <p className="auth-error" role="alert">{error}</p>}
 
                 <button type="submit" className="auth-submit" disabled={loading}>
-                    {loading ? 'Создание…' : 'Создать аккаунт'}
+                    {loading ? 'Создание…' : accountType === 'performer' ? 'Создать аккаунт исполнителя' : 'Создать аккаунт заказчика'}
                     {!loading && <ArrowRightIcon />}
                 </button>
             </form>
@@ -173,7 +182,7 @@ export function RegisterPage() {
             </p>
 
             <p className="auth-switch">
-                Уже есть аккаунт? <Link to="/login">Войти</Link>
+                Уже есть аккаунт? <Link to={`/login?accountType=${accountType}`}>Войти</Link>
             </p>
         </AuthShell>
     );

@@ -1,0 +1,70 @@
+services:
+  database:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillgit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillgit-local}
+      POSTGRES_DB: ${POSTGRES_DB:-skillgit}
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - crm_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  web-server:
+    build:
+      context: .
+      dockerfile: .docker/frontend.Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-skillgit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillgit-local}
+      POSTGRES_DB: ${POSTGRES_DB:-skillgit}
+      REDIS_URL: redis://redis:6379/0
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  auth_db_data:
+  crm_redis_data:

@@ -32,9 +32,10 @@ export function AdminShell({
     navItems,
     children,
     footerLink,
+    className,
 }) {
     return (
-        <div className="admin-app">
+        <div className={`admin-app${className ? ` ${className}` : ''}`}>
             <aside className="admin-sidebar">
                 <div className="admin-sidebar-brand">
                     <span className="admin-sidebar-logo" style={{ background: brandColor }}>

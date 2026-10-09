@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getTaskById, getDirectionLabel } from '../../data/mockData';
 import { companySlugFromName } from '../../data/companyAdminData';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
 import { HeaderActions } from '../ui/HeaderActions';
 import { EmptyState } from '../ui/EmptyState';
 import {
@@ -36,10 +38,51 @@ function MarkdownBlock({ text }) {
 
 export function TaskDetailPage() {
     const { id } = useParams();
-    const task = getTaskById(id);
+    const navigate = useNavigate();
+    const staticTask = getTaskById(id);
+    const { user, accessToken } = useAuth();
+    const [companyTask, setCompanyTask] = useState(null);
     const [applied, setApplied] = useState(false);
+    const [applyError, setApplyError] = useState('');
+    const [applying, setApplying] = useState(false);
+    const [loading, setLoading] = useState(!staticTask);
+
+    useEffect(() => {
+        setCompanyTask(null);
+        setLoading(!staticTask);
+        if (staticTask) return undefined;
+        let cancelled = false;
+        api.getTask(id)
+            .then(task => { if (!cancelled) setCompanyTask(task); })
+            .catch(() => { if (!cancelled) setCompanyTask(null); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [id, staticTask]);
+
+    const task = staticTask ?? companyTask;
+    const companySlug = task ? (task.companySlug || companySlugFromName(task.company)) : '';
+
+    async function handleApply() {
+        setApplyError('');
+        if (!accessToken || !user) {
+            navigate('/login?accountType=performer', { state: { from: { pathname: `/tasks/${id}` } } });
+            return;
+        }
+        if (user.accountType !== 'performer') return;
+        setApplying(true);
+        try {
+            await api.applyToTask(id, { cover: '' }, accessToken);
+            setApplied(true);
+        } catch (error) {
+            if (error.message.includes('уже откликнулись')) setApplied(true);
+            else setApplyError(error.message || 'Не удалось отправить отклик');
+        } finally {
+            setApplying(false);
+        }
+    }
 
     if (!task) {
+        if (loading) return <div className="task-detail-page"><div className="home-empty">Загружаем задание…</div></div>;
         return (
             <div className="task-detail-page">
                 <header className="home-header">
@@ -84,7 +127,7 @@ export function TaskDetailPage() {
                             {task.company.charAt(0)}
                         </div>
                         <div>
-                            <Link to={`/companies/${companySlugFromName(task.company)}`} className="task-detail-company">
+                            <Link to={`/companies/${companySlug}`} className="task-detail-company">
                                 {task.company}
                             </Link>
                             <h1>{task.title}</h1>
@@ -164,16 +207,20 @@ export function TaskDetailPage() {
                                 <CheckCircleIcon />
                                 Отклик отправлен! Компания свяжется с тобой в чате.
                             </div>
+                        ) : user?.accountType === 'customer' ? (
+                            <div className="applied-notice">Откликнуться на задание может аккаунт исполнителя.</div>
                         ) : (
                             <button
                                 type="button"
                                 className="task-detail-btn task-detail-btn-primary"
-                                onClick={() => setApplied(true)}
+                                onClick={handleApply}
+                                disabled={applying}
                             >
-                                Откликнуться
-                                <ArrowRightIcon />
+                                {applying ? 'Отправляем…' : 'Откликнуться'}
+                                {!applying && <ArrowRightIcon />}
                             </button>
                         )}
+                        {applyError && <p className="auth-error" role="alert">{applyError}</p>}
 
                         <Link to="/chat" className="task-detail-btn task-detail-btn-ghost">
                             Задать вопрос

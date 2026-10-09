@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import AppRouter from './AppRouter';
-import { AuthSync } from './components/auth/AuthSync';
 import { useAuth } from './context/AuthContext';
 import { useUserSettings } from './context/UserSettingsContext';
 import { SettingsIcon, RocketIcon, AgentsIcon } from './components/pages/icons';
@@ -53,7 +52,10 @@ const PAGE_TITLES = {
 
 function Sidebar() {
   const { user } = useUserSettings();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user: authUser } = useAuth();
+  const navItems = authUser?.accountType === 'performer'
+    ? [...NAV, { to: '/my-work', Icon: IconTasks, label: 'Мои сделки' }]
+    : NAV;
 
   return (
     <aside className="sidebar">
@@ -64,7 +66,7 @@ function Sidebar() {
         </NavLink>
 
         <nav className="menu">
-          {NAV.map(({ to, end, Icon, label, badge }) => (
+          {navItems.map(({ to, end, Icon, label, badge }) => (
             <NavLink key={`${to}-${label}`} to={to} end={end} className="nav-item">
               <Icon />
               <span>{label}</span>
@@ -128,6 +130,7 @@ function App() {
   const isMateAI = pathname === '/mateai';
   const isHome = pathname === '/';
   const isTasks = pathname === '/tasks';
+  const isMyWork = pathname === '/my-work';
   const isTeam = pathname === '/team';
   const isLabSkill = pathname === '/labskill' || pathname.startsWith('/labskill/');
   const isProfile = pathname === '/profile';
@@ -136,8 +139,8 @@ function App() {
   const isNotifications = pathname === '/notifications';
   const isHelp = pathname === '/help';
   const isPublic = pathname.startsWith('/companies/') || pathname.startsWith('/users/');
-  const isTaskDetail = /^\/tasks\/\d+$/.test(pathname);
-  const isFullWidth = isHome || isTasks || isTeam || isLabSkill || isProfile
+  const isTaskDetail = /^\/tasks\/(?:crm-)?\d+$/.test(pathname);
+  const isFullWidth = isHome || isTasks || isMyWork || isTeam || isLabSkill || isProfile
     || isSettings || isHowItWorks || isTaskDetail || isNotifications || isHelp || isPublic;
 
   if (isAccess || isAuth) {
@@ -168,7 +171,6 @@ function App() {
 
   return (
     <div className="app">
-      <AuthSync />
       <Sidebar />
       <div className="main-wrap">
         {!isChat && !isSkillMate && !isFullWidth && <TopBar />}

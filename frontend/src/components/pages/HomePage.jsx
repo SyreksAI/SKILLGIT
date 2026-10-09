@@ -4,6 +4,7 @@ import { TASKS, CURRENT_USER } from '../../data/mockData';
 import { TaskCard } from '../ui/TaskCard';
 import { HomeRightSidebar } from '../layout/HomeRightSidebar';
 import { HeaderActions } from '../ui/HeaderActions';
+import { api } from '../../services/api';
 import {
     SearchIcon,
     GridIcon,
@@ -30,6 +31,15 @@ export function HomePage() {
     const activeFilter = FILTER_IDS.includes(urlFilter) ? urlFilter : 'all';
     const [search, setSearch] = useState(urlSearch);
     const [appliedIds, setAppliedIds] = useState([]);
+    const [companyTasks, setCompanyTasks] = useState([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.getTasks()
+            .then(tasks => { if (!cancelled) setCompanyTasks(tasks); })
+            .catch(error => console.error('Не удалось загрузить задания компаний:', error));
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         setSearch(urlSearch);
@@ -55,7 +65,7 @@ export function HomePage() {
     }
 
     const filteredTasks = useMemo(() => {
-        let result = [...TASKS];
+        let result = [...companyTasks, ...TASKS];
 
         if (activeFilter === 'direction') {
             result = result.filter(t => t.direction === CURRENT_USER.direction);
@@ -75,7 +85,7 @@ export function HomePage() {
         }
 
         return result;
-    }, [activeFilter, search]);
+    }, [activeFilter, search, companyTasks]);
     
 
     return (

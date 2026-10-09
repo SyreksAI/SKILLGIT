@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useModals } from '../../context/ModalsContext';
-import { useBalance } from '../../context/BalanceContext';
 import {
     TrophyIcon,
     StarIcon,
@@ -12,7 +11,6 @@ import {
 
 export function ProfileRightSidebar({ stats, teamsCount, reposCount }) {
     const { openBalance } = useModals();
-    const { balanceLabel } = useBalance();
 
     return (
         <aside className="profile-right">
@@ -20,7 +18,7 @@ export function ProfileRightSidebar({ stats, teamsCount, reposCount }) {
                 <h3>Рейтинг</h3>
                 <div className="profile-rating-block">
                     <StarIcon />
-                    <strong>{stats.rating}</strong>
+                    <strong>{stats.rating ?? '—'}</strong>
                     <span>{stats.reviews} отзывов</span>
                 </div>
             </div>
@@ -39,7 +37,7 @@ export function ProfileRightSidebar({ stats, teamsCount, reposCount }) {
                         <button type="button" className="profile-achievement-btn" onClick={openBalance}>
                             <CoinIcon />
                             <div>
-                                <strong>{balanceLabel}</strong>
+                                <strong>{stats.balanceLabel ?? '0 ₽'}</strong>
                                 <span>Баланс</span>
                             </div>
                         </button>

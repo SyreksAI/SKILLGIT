@@ -1,13 +1,43 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { TASKS } from '../../data/mockData';
 import { getCompanyBySlug } from '../../data/companyAdminData';
+import { api } from '../../services/api';
 import { TaskCard } from '../ui/TaskCard';
 import { HeaderActions } from '../ui/HeaderActions';
 import { SearchIcon } from './icons';
 
 export function CompanyPublicPage() {
     const { slug } = useParams();
-    const company = getCompanyBySlug(slug);
+    const [remoteState, setRemoteState] = useState({ slug: null, loading: true, data: null, error: '' });
+
+    useEffect(() => {
+        let cancelled = false;
+        setRemoteState({ slug, loading: true, data: null, error: '' });
+        api.getPublicCompany(slug)
+            .then(data => {
+                if (!cancelled) setRemoteState({ slug, loading: false, data, error: '' });
+            })
+            .catch(error => {
+                if (!cancelled) setRemoteState({ slug, loading: false, data: null, error: error.message });
+            });
+        return () => { cancelled = true; };
+    }, [slug]);
+
+    const state = remoteState.slug === slug
+        ? remoteState
+        : { slug, loading: true, data: null, error: '' };
+    const company = state.data ?? getCompanyBySlug(slug);
+    const companyNotFound = state.error.includes('404') || state.error.includes('не найдена');
+
+    if (!company && state.loading) {
+        return (
+            <div className="public-page">
+                <header className="home-header"><HeaderActions /></header>
+                <div className="account-page"><p>Загружаем компанию…</p></div>
+            </div>
+        );
+    }
 
     if (!company) {
         return (
@@ -16,14 +46,17 @@ export function CompanyPublicPage() {
                     <HeaderActions />
                 </header>
                 <div className="account-page">
-                    <h1>Компания не найдена</h1>
+                    <h1>{companyNotFound ? 'Компания не найдена' : 'Не удалось загрузить компанию'}</h1>
+                    <p>{companyNotFound
+                        ? 'У этой компании пока нет опубликованных заданий или ссылка устарела.'
+                        : 'Проверьте подключение и попробуйте открыть страницу ещё раз.'}</p>
                     <Link to="/" className="admin-link">← На главную</Link>
                 </div>
             </div>
         );
     }
 
-    const companyTasks = TASKS.filter(t => t.company === company.name);
+    const companyTasks = state.data?.tasks ?? TASKS.filter(t => t.company === company.name);
 
     return (
         <div className="public-page">

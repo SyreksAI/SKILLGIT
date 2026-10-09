@@ -18,7 +18,7 @@ export function CompanyTeamPage() {
 
     return (
         <div className="admin-page">
-            <AdminPanelHead title="Команда HR" subtitle="Менеджеры с доступом к кабинету компании" />
+            <AdminPanelHead title="Команда HR" subtitle="Контактный список сотрудников компании" />
 
             <form className="admin-card admin-form admin-form--inline" onSubmit={handleAdd}>
                 <label className="admin-field">
@@ -38,11 +38,15 @@ export function CompanyTeamPage() {
                         <option>Viewer</option>
                     </select>
                 </label>
-                <button type="submit" className="admin-btn admin-btn--primary">Пригласить</button>
+                <button type="submit" className="admin-btn admin-btn--primary">Добавить контакт</button>
             </form>
 
+            <p className="admin-text-sm">
+                Контакт сохранится в списке CRM. Создание аккаунта и отправка приглашения пока не подключены.
+            </p>
+
             <div className="admin-card admin-card--flush">
-                <AdminTable columns={['Сотрудник', 'Email', 'Роль', '']}>
+                <AdminTable columns={['Сотрудник', 'Email', 'Роль', '']} empty="Добавьте HR-специалистов, чтобы вести команду в CRM.">
                     {team.map(member => (
                         <tr key={member.id}>
                             <td>

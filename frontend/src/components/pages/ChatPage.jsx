@@ -7,6 +7,8 @@ import { CONVERSATIONS, MESSAGES } from '../../data/mockData';
 import { useSearchParam } from '../../hooks/useSearchParam';
 
 import { HeaderActions } from '../ui/HeaderActions';
+import { useAuth } from '../../context/AuthContext';
+import { PerformerTaskInbox } from './PerformerTaskInbox';
 
 import {
 
@@ -179,6 +181,7 @@ function resolveChatId(raw) {
 
 
 export function ChatPage() {
+    const { user } = useAuth();
 
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -461,6 +464,8 @@ export function ChatPage() {
     }
 
 
+
+    if (user?.accountType === 'performer') return <PerformerTaskInbox />;
 
     return (
 

@@ -2,48 +2,23 @@ import React, {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
-import { CURRENT_USER } from '../data/mockData';
+import { api } from '../services/api';
 
 const SESSION_KEY = 'skillgit-auth-session';
-const USERS_KEY = 'skillgit-auth-users';
-
-const DEMO_USER = {
-    id: '1',
-    email: 'ivan.ivanov@mail.ru',
-    password: 'demo123',
-    name: CURRENT_USER.name,
-    username: CURRENT_USER.username,
-    role: CURRENT_USER.role,
-    direction: CURRENT_USER.direction,
-};
 
 function loadSession() {
     try {
         const raw = localStorage.getItem(SESSION_KEY);
-        return raw ? JSON.parse(raw) : null;
+        const session = raw ? JSON.parse(raw) : null;
+        // Discard sessions created by the previous browser-only demo auth.
+        return session?.token && !session.token.startsWith('mock-') ? session : null;
     } catch {
         return null;
     }
-}
-
-function loadUsers() {
-    try {
-        const raw = localStorage.getItem(USERS_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch {
-        /* ignore */
-    }
-    return [DEMO_USER];
-}
-
-function saveUsers(users) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 function saveSession(session) {
@@ -54,114 +29,80 @@ function saveSession(session) {
     }
 }
 
-function slugifyUsername(value) {
-    return value
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-}
-
-function publicUser(user) {
-    return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        username: user.username,
-        role: user.role,
-        direction: user.direction,
-    };
-}
-
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
     const [session, setSession] = useState(() => loadSession());
 
+    useEffect(() => {
+        if (!session?.token) return undefined;
+        let cancelled = false;
+
+        api.getCurrentUser(session.token)
+            .then(user => {
+                if (cancelled) return;
+                const refreshedSession = { ...session, user };
+                saveSession(refreshedSession);
+                setSession(refreshedSession);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                saveSession(null);
+                setSession(null);
+            });
+
+        return () => { cancelled = true; };
+    // Validate the persisted token once when the app starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const user = session?.user ?? null;
     const isAuthenticated = Boolean(user);
 
-    const login = useCallback(async (email, password) => {
-        const normalizedEmail = email.trim().toLowerCase();
-        const users = loadUsers();
-        const found = users.find(
-            u => u.email.toLowerCase() === normalizedEmail && u.password === password,
-        );
-
-        if (!found) {
-            throw new Error('Неверный email или пароль');
-        }
-
-        const nextSession = {
-            token: `mock-${found.id}-${Date.now()}`,
-            user: publicUser(found),
-        };
+    const acceptAuthResponse = useCallback(response => {
+        const nextSession = { token: response.access_token, user: response.user };
         saveSession(nextSession);
         setSession(nextSession);
         return nextSession.user;
     }, []);
 
-    const register = useCallback(async (payload) => {
-        const name = payload.name.trim();
-        const email = payload.email.trim().toLowerCase();
-        const password = payload.password;
-        const username = slugifyUsername(payload.username || name);
-        const direction = payload.direction || 'dev';
-
-        if (!name || !email || !password) {
-            throw new Error('Заполните все обязательные поля');
-        }
-
-        if (password.length < 6) {
-            throw new Error('Пароль должен быть не короче 6 символов');
-        }
-
-        const users = loadUsers();
-
-        if (users.some(u => u.email.toLowerCase() === email)) {
-            throw new Error('Пользователь с таким email уже существует');
-        }
-
-        if (users.some(u => u.username === username)) {
-            throw new Error('Это имя пользователя уже занято');
-        }
-
-        const newUser = {
-            id: String(Date.now()),
-            email,
+    const login = useCallback(async (email, password, accountType = 'performer') => {
+        const response = await api.loginAccount({
+            email: email.trim().toLowerCase(),
             password,
-            name,
-            username,
-            role: 'Студент',
-            direction,
-        };
+            accountType,
+        });
+        return acceptAuthResponse(response);
+    }, [acceptAuthResponse]);
 
-        const nextUsers = [...users, newUser];
-        saveUsers(nextUsers);
-
-        const nextSession = {
-            token: `mock-${newUser.id}-${Date.now()}`,
-            user: publicUser(newUser),
-        };
-        saveSession(nextSession);
-        setSession(nextSession);
-        return nextSession.user;
-    }, []);
+    const register = useCallback(async payload => {
+        const response = await api.registerAccount({
+            ...payload,
+            name: payload.name.trim(),
+            email: payload.email.trim().toLowerCase(),
+        });
+        return acceptAuthResponse(response);
+    }, [acceptAuthResponse]);
 
     const logout = useCallback(() => {
+        const token = session?.token;
         saveSession(null);
         setSession(null);
-    }, []);
+        if (token) {
+            // Clear the browser session immediately, and revoke the server session too.
+            return api.logoutAccount(token).catch(() => null);
+        }
+        return Promise.resolve(null);
+    }, [session?.token]);
 
     const value = useMemo(() => ({
         user,
+        accessToken: session?.token ?? null,
         isAuthenticated,
         login,
         register,
         logout,
-    }), [user, isAuthenticated, login, register, logout]);
+    }), [user, session?.token, isAuthenticated, login, register, logout]);
 
     return (
         <AuthContext.Provider value={value}>

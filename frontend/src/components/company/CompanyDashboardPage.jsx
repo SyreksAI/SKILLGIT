@@ -6,11 +6,16 @@ import { CrmBarChart, CrmSparkline, CrmTimeline } from '../crm/CrmShared';
 export function CompanyDashboardPage() {
     const { stats, activities, deals, filteredApplicants, messages } = useCompanyAdmin();
     const { trends } = stats;
+    const monthLabels = Array.from({ length: 12 }, (_, index) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() - 11 + index);
+        return date.toLocaleDateString('ru-RU', { month: 'short' });
+    });
 
     return (
         <div className="admin-page">
             <AdminPanelHead
-                title="CRM Dashboard"
+                title="Обзор CRM"
                 subtitle="Полная картина найма, сделок и коммуникаций"
                 actions={(
                     <Link to="/company/tasks/new" className="admin-btn admin-btn--primary">+ Задание</Link>
@@ -18,7 +23,7 @@ export function CompanyDashboardPage() {
             />
 
             <div className="admin-stats-grid">
-                <AdminStatCard label="Отклики (30 дн.)" value={trends.applications.at(-1)} accent="blue">
+                <AdminStatCard label="Отклики всего" value={stats.totalApplicants} accent="blue">
                     <CrmSparkline data={trends.applications} />
                 </AdminStatCard>
                 <AdminStatCard label="Конверсия" value={`${stats.conversion}%`} accent="green">
@@ -49,9 +54,9 @@ export function CompanyDashboardPage() {
 
                 <section className="admin-card">
                     <div className="admin-card-head">
-                        <h2>Отклики по неделям</h2>
+                        <h2>Отклики по месяцам</h2>
                     </div>
-                    <CrmBarChart data={trends.applications.slice(-8)} color="var(--brand)" height={140} />
+                    <CrmBarChart data={trends.applications} labels={monthLabels} color="var(--brand)" height={140} />
                 </section>
 
                 <section className="admin-card">
@@ -59,7 +64,7 @@ export function CompanyDashboardPage() {
                         <h2>Расходы</h2>
                         <Link to="/company/billing" className="admin-link">Финансы →</Link>
                     </div>
-                    <CrmBarChart data={trends.spend.slice(-6).map(v => Math.round(v / 1000))} labels={['Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен']} color="#ef4444" height={120} />
+                    <CrmBarChart data={trends.spend.slice(-6).map(v => Math.round(v / 1000))} labels={monthLabels.slice(-6)} color="#ef4444" height={120} />
                 </section>
 
                 <section className="admin-card">
@@ -88,6 +93,7 @@ export function CompanyDashboardPage() {
                                 <Link to="/company/pipeline" className="admin-link">Открыть</Link>
                             </li>
                         ))}
+                        {!filteredApplicants.some(a => ['new', 'interview', 'offer'].includes(a.status)) && <li className="admin-empty-text">Пока нет кандидатов на активных этапах.</li>}
                     </ul>
                 </section>
 
@@ -105,6 +111,7 @@ export function CompanyDashboardPage() {
                                 </div>
                             </li>
                         ))}
+                        {!deals.length && <li className="admin-empty-text">Сделки появятся после отправки оффера кандидату.</li>}
                     </ul>
                     {messages.some(m => m.unread > 0) && (
                         <Link to="/company/messages" className="admin-btn admin-btn--ghost admin-btn--sm">

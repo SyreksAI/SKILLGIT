@@ -1,20 +1,12 @@
-import React, { useMemo } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSearchParam } from '../../hooks/useSearchParam';
-import {
-    MY_TASKS,
-    TEAMS,
-    ACTIVITY,
-    USER_REVIEWS,
-} from '../../data/mockData';
 import { useUserSettings } from '../../context/UserSettingsContext';
-import { useLabSkillRepos } from '../../context/LabSkillReposContext';
+import { useAuth } from '../../context/AuthContext';
 import { MyTaskRow } from '../ui/MyTaskRow';
-import { GhPinnedRepo } from '../ui/GhRepoListItem';
 import { ProfileRightSidebar } from '../layout/ProfileRightSidebar';
 import { HeaderActions } from '../ui/HeaderActions';
 import { useModals } from '../../context/ModalsContext';
-import { useBalance } from '../../context/BalanceContext';
 import {
     SearchIcon,
     MailIcon,
@@ -25,12 +17,6 @@ import {
     GridIcon,
 } from './icons';
 
-const TABS = [
-    { id: 'overview', label: 'Обзор', Icon: BookIcon },
-    { id: 'tasks', label: 'Задачи', count: MY_TASKS.length, Icon: GridIcon },
-    { id: 'reviews', label: 'Отзывы', count: USER_REVIEWS.length, Icon: StarIcon },
-];
-
 const ACTIVITY_LABELS = {
     completed: 'Выполнено',
     repo: 'Репозиторий',
@@ -39,23 +25,48 @@ const ACTIVITY_LABELS = {
     review: 'Проверка',
 };
 
-const TAB_IDS = TABS.map(t => t.id);
+const TAB_IDS = ['overview', 'tasks', 'reviews'];
 
 export function ProfilePage() {
     const [tab, setTab] = useSearchParam('tab', 'overview', TAB_IDS);
-    const { repos } = useLabSkillRepos();
     const { openBalance } = useModals();
-    const { balanceLabel } = useBalance();
-    const { user, getDirectionLabel } = useUserSettings();
+    const { user, getDirectionLabel, profileLoading, profileError } = useUserSettings();
+    const { isAuthenticated } = useAuth();
 
-    const pinnedRepos = repos.filter(r => r.pinned).slice(0, 4);
-    const myTeams = TEAMS.slice(0, 3);
+    useEffect(() => {
+        if (isAuthenticated) window.dispatchEvent(new Event('skillgit:profile-refresh'));
+    }, [isAuthenticated]);
 
-    const taskStats = useMemo(() => ({
-        completed: MY_TASKS.filter(t => t.status === 'completed').length,
-        active: MY_TASKS.filter(t => t.status === 'in_progress' || t.status === 'applied').length,
-        review: MY_TASKS.filter(t => t.status === 'review').length,
-    }), []);
+    const tasks = user.tasks ?? [];
+    const reviews = user.reviews ?? [];
+    const activity = user.activity ?? [];
+    const teams = user.teams ?? [];
+    const taskStats = {
+        completed: tasks.filter(task => task.status === 'completed').length,
+        active: tasks.filter(task => task.status === 'in_progress' || task.status === 'applied').length,
+        review: tasks.filter(task => task.status === 'review').length,
+    };
+    const tabs = [
+        { id: 'overview', label: 'Обзор', Icon: BookIcon },
+        { id: 'tasks', label: 'Задачи', count: tasks.length, Icon: GridIcon },
+        { id: 'reviews', label: 'Отзывы', count: reviews.length, Icon: StarIcon },
+    ];
+
+    if (!isAuthenticated) {
+        return (
+            <div className="user-profile-page">
+                <section className="user-profile-content profile-empty-note">
+                    <h1>Войдите, чтобы открыть профиль</h1>
+                    <p>Профиль доступен после входа в аккаунт.</p>
+                    <Link to="/login">Войти</Link>
+                </section>
+            </div>
+        );
+    }
+
+    if (profileLoading) {
+        return <div className="user-profile-page profile-empty-note">Загружаем профиль…</div>;
+    }
 
     return (
         <div className="user-profile-page">
@@ -70,16 +81,16 @@ export function ProfilePage() {
             <section className="user-profile-hero">
                 <div className="user-profile-cover" />
                 <div className="user-profile-hero-body">
-                    <div className="user-profile-avatar">{user.name.charAt(0)}</div>
+                    <div className="user-profile-avatar">{user.name?.charAt(0) || '?'}</div>
                     <div className="user-profile-info">
                         <div className="user-profile-headline">
                             <div>
-                                <h1>{user.name}</h1>
+                                <h1>{user.name || 'Мой профиль'}</h1>
                                 <p className="user-profile-role">
                                     {user.role}
-                                    <span className="user-profile-direction">
-                                        {getDirectionLabel(user.direction)}
-                                    </span>
+                                    {user.accountType === 'performer' && user.direction && (
+                                        <span className="user-profile-direction">{getDirectionLabel(user.direction)}</span>
+                                    )}
                                 </p>
                                 <p className="user-profile-meta">
                                     @{user.username}
@@ -101,6 +112,7 @@ export function ProfilePage() {
                         </div>
 
                         {user.bio && <p className="user-profile-bio">{user.bio}</p>}
+                        {profileError && <p className="auth-error" role="alert">{profileError}</p>}
 
                         <div className="user-profile-stats-bar">
                             <button type="button" onClick={() => setTab('tasks')}>
@@ -108,15 +120,15 @@ export function ProfilePage() {
                                 <span>задач</span>
                             </button>
                             <button type="button" onClick={() => setTab('reviews')}>
-                                <strong>{user.stats.rating}</strong>
+                                <strong>{user.stats.rating ?? '—'}</strong>
                                 <span>рейтинг</span>
                             </button>
                             <button type="button" onClick={openBalance}>
-                                <strong>{balanceLabel}</strong>
+                                <strong>{user.stats.balanceLabel}</strong>
                                 <span>баланс</span>
                             </button>
                             <Link to="/team?filter=mine">
-                                <strong>{user.followers}</strong>
+                                <strong>{user.stats.followers}</strong>
                                 <span>подписчиков</span>
                             </Link>
                         </div>
@@ -127,7 +139,7 @@ export function ProfilePage() {
             <div className="home-layout user-profile-layout">
                 <div className="user-profile-main">
                     <nav className="user-profile-tabs">
-                        {TABS.map(({ id, label, count, Icon }) => (
+                        {tabs.map(({ id, label, count, Icon }) => (
                             <button
                                 key={id}
                                 type="button"
@@ -144,76 +156,71 @@ export function ProfilePage() {
                     {tab === 'overview' && (
                         <div className="user-profile-content">
                             <section className="user-profile-block">
-                                <h2>Навыки</h2>
-                                <div className="user-profile-skills">
-                                    {user.skills.map(skill => (
-                                        <span key={skill} className="user-profile-skill">{skill}</span>
-                                    ))}
+                                <div className="user-profile-block-head">
+                                    <h2>Навыки</h2>
+                                    <Link to="/settings?section=public">Редактировать профиль →</Link>
                                 </div>
-                            </section>
-
-                            {pinnedRepos.length > 0 && (
-                                <section className="user-profile-block">
-                                    <div className="user-profile-block-head">
-                                        <h2>Закреплённые проекты</h2>
-                                        <Link to="/labskill">Все репозитории →</Link>
-                                    </div>
-                                    <div className="user-profile-pinned">
-                                        {pinnedRepos.map(repo => (
-                                            <GhPinnedRepo key={repo.id} repo={repo} />
+                                {user.skills.length > 0 ? (
+                                    <div className="user-profile-skills">
+                                        {user.skills.map(skill => (
+                                            <span key={skill} className="user-profile-skill">{skill}</span>
                                         ))}
                                     </div>
-                                </section>
-                            )}
+                                ) : (
+                                    <p className="profile-empty-note">Добавьте свои навыки в настройках профиля.</p>
+                                )}
+                            </section>
 
                             <section className="user-profile-block">
                                 <div className="user-profile-block-head">
                                     <h2>Команды</h2>
                                     <Link to="/team">Все команды →</Link>
                                 </div>
-                                <ul className="user-profile-teams">
-                                    {myTeams.map(team => (
-                                        <li key={team.id}>
-                                            <Link to={`/team?search=${encodeURIComponent(team.name)}`}>
-                                                <div
-                                                    className="user-profile-team-logo"
-                                                    style={{ background: team.color }}
-                                                >
-                                                    {team.name.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <strong>{team.name}</strong>
-                                                    <span>{team.members} участников · {getDirectionLabel(team.direction)}</span>
-                                                </div>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
+                                {teams.length > 0 ? (
+                                    <ul className="user-profile-teams">
+                                        {teams.map(team => (
+                                            <li key={team.id}>
+                                                <Link to={`/team?search=${encodeURIComponent(team.name)}`}>
+                                                    <div className="user-profile-team-logo" style={{ background: team.color }}>
+                                                        {team.name.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <strong>{team.name}</strong>
+                                                        <span>{team.members} участников · {getDirectionLabel(team.direction)}</span>
+                                                    </div>
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="profile-empty-note">Вы пока не состоите в командах.</p>
+                                )}
                             </section>
 
                             <section className="user-profile-block">
                                 <h2>Последняя активность</h2>
-                                <div className="user-profile-activity">
-                                    {ACTIVITY.map(item => (
-                                        item.href ? (
-                                            <Link key={item.id} to={item.href} className="user-profile-activity-item">
-                                                <span className="user-profile-activity-type" data-type={item.type}>
-                                                    {ACTIVITY_LABELS[item.type]}
-                                                </span>
-                                                <p>{item.text}</p>
-                                                <time>{item.time}</time>
-                                            </Link>
-                                        ) : (
-                                            <div key={item.id} className="user-profile-activity-item">
-                                                <span className="user-profile-activity-type" data-type={item.type}>
-                                                    {ACTIVITY_LABELS[item.type]}
-                                                </span>
-                                                <p>{item.text}</p>
-                                                <time>{item.time}</time>
-                                            </div>
-                                        )
-                                    ))}
-                                </div>
+                                {activity.length > 0 ? (
+                                    <div className="user-profile-activity">
+                                        {activity.map(item => {
+                                            const content = (
+                                                <>
+                                                    <span className="user-profile-activity-type" data-type={item.type}>
+                                                        {ACTIVITY_LABELS[item.type] ?? 'Активность'}
+                                                    </span>
+                                                    <p>{item.text}</p>
+                                                    <time>{item.time}</time>
+                                                </>
+                                            );
+                                            return item.href ? (
+                                                <Link key={item.id} to={item.href} className="user-profile-activity-item">{content}</Link>
+                                            ) : (
+                                                <div key={item.id} className="user-profile-activity-item">{content}</div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="profile-empty-note">Здесь появятся ваши действия — отклики, выполненные задачи и обновления профиля.</p>
+                                )}
                             </section>
                         </div>
                     )}
@@ -223,17 +230,24 @@ export function ProfilePage() {
                             <div className="user-profile-block-head user-profile-block-head-inline">
                                 <h2>Мои задачи</h2>
                                 <div className="user-profile-task-summary">
-                                    <Link to="/tasks?filter=active">{taskStats.active} активных</Link>
-                                    <Link to="/tasks?filter=review">{taskStats.review} на проверке</Link>
-                                    <Link to="/tasks?filter=completed">{taskStats.completed} выполнено</Link>
+                                    <span>{taskStats.active} активных</span>
+                                    <span>{taskStats.review} на проверке</span>
+                                    <span>{taskStats.completed} выполнено</span>
                                 </div>
                             </div>
-                            <div className="user-profile-tasks">
-                                {MY_TASKS.map(task => (
-                                    <MyTaskRow key={task.id} task={task} />
-                                ))}
-                            </div>
-                            <Link to="/tasks" className="user-profile-more-link">
+                            {tasks.length > 0 ? (
+                                <div className="user-profile-tasks">
+                                    {tasks.map(task => <MyTaskRow key={task.id} task={task} />)}
+                                </div>
+                            ) : (
+                                <div className="profile-empty-note">
+                                    <p>У вас пока нет задач.</p>
+                                    <Link to={user.accountType === 'customer' ? '/company/tasks/new' : '/tasks'}>
+                                        {user.accountType === 'customer' ? 'Создать первую задачу' : 'Найти задачи'}
+                                    </Link>
+                                </div>
+                            )}
+                            <Link to={user.accountType === 'customer' ? '/company/tasks' : '/tasks'} className="user-profile-more-link">
                                 Открыть все задачи →
                             </Link>
                         </div>
@@ -244,37 +258,37 @@ export function ProfilePage() {
                             <section className="user-profile-block">
                                 <div className="user-profile-rating-summary">
                                     <StarIcon />
-                                    <strong>{user.stats.rating}</strong>
-                                    <span>на основе {user.stats.reviews} отзывов</span>
+                                    <strong>{user.stats.rating ?? '—'}</strong>
+                                    <span>{user.stats.reviews} отзывов</span>
                                 </div>
                             </section>
-                            <div className="user-profile-reviews">
-                                {USER_REVIEWS.map(review => (
-                                    <article key={review.id} className="user-profile-review">
-                                        <div className="user-profile-review-head">
-                                            <div>
-                                                <strong>{review.author}</strong>
-                                                <span>{review.company}</span>
+                            {reviews.length > 0 ? (
+                                <div className="user-profile-reviews">
+                                    {reviews.map(review => (
+                                        <article key={review.id} className="user-profile-review">
+                                            <div className="user-profile-review-head">
+                                                <div>
+                                                    <strong>{review.author}</strong>
+                                                    <span>{review.company}</span>
+                                                </div>
+                                                <div className="user-profile-review-stars">
+                                                    {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+                                                </div>
                                             </div>
-                                            <div className="user-profile-review-stars">
-                                                {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
-                                            </div>
-                                        </div>
-                                        <p className="user-profile-review-task">{review.task}</p>
-                                        <p className="user-profile-review-text">{review.text}</p>
-                                        <time>{review.date}</time>
-                                    </article>
-                                ))}
-                            </div>
+                                            <p className="user-profile-review-task">{review.task}</p>
+                                            <p className="user-profile-review-text">{review.text}</p>
+                                            <time>{review.date}</time>
+                                        </article>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="profile-empty-note">Пока нет отзывов. Они появятся после завершения первых задач.</p>
+                            )}
                         </div>
                     )}
                 </div>
 
-                <ProfileRightSidebar
-                    stats={user.stats}
-                    teamsCount={3}
-                    reposCount={repos.length}
-                />
+                <ProfileRightSidebar stats={user.stats} teamsCount={teams.length} reposCount={0} />
             </div>
         </div>
     );

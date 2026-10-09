@@ -17,6 +17,7 @@ import { NotificationsPage } from './components/pages/NotificationsPage';
 import { HelpPage } from './components/pages/HelpPage';
 import { CompanyPublicPage } from './components/pages/CompanyPublicPage';
 import { UserPublicPage } from './components/pages/UserPublicPage';
+import { PerformerDealsPage } from './components/pages/PerformerDealsPage';
 import { AccessPage } from './components/pages/AccessPage';
 import { LoginPage } from './components/pages/LoginPage';
 import { RegisterPage } from './components/pages/RegisterPage';
@@ -64,6 +65,7 @@ function AppRouter() {
             <Route path="/help" element={<HelpPage />} />
             <Route path="/companies/:slug" element={<CompanyPublicPage />} />
             <Route path="/users/:username" element={<UserPublicPage />} />
+            <Route path="/my-work" element={<PerformerDealsPage />} />
             <Route path="/access" element={<AccessPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />

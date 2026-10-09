@@ -2,10 +2,13 @@ import React, {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
-import { CURRENT_USER, DIRECTIONS } from '../data/mockData';
+import { useAuth } from './AuthContext';
+import { api } from '../services/api';
+import { DIRECTIONS } from '../data/mockData';
 
 const STORAGE_KEY = 'skillgit-user-settings';
 
@@ -17,79 +20,127 @@ const DEFAULT_NOTIFICATIONS = {
     reviews: true,
 };
 
-function loadStoredSettings() {
+const EMPTY_PROFILE = {
+    id: null,
+    name: '',
+    username: '',
+    role: '',
+    accountType: 'performer',
+    direction: null,
+    bio: '',
+    skills: [],
+    location: '',
+    website: '',
+    company: '',
+    stats: {
+        tasksDone: 0,
+        tasksActive: 0,
+        tasksReview: 0,
+        balanceAmount: 0,
+        balanceLabel: '0 ₽',
+        rating: null,
+        reviews: 0,
+        followers: 0,
+        following: 0,
+    },
+    tasks: [],
+    reviews: [],
+    activity: [],
+    teams: [],
+};
+
+function loadNotifications() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return null;
-        return JSON.parse(raw);
+        return raw ? JSON.parse(raw).notifications ?? { ...DEFAULT_NOTIFICATIONS } : { ...DEFAULT_NOTIFICATIONS };
     } catch {
-        return null;
+        return { ...DEFAULT_NOTIFICATIONS };
     }
+}
+
+function saveNotifications(notifications) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ notifications }));
 }
 
 const UserSettingsContext = createContext(null);
 
 export function UserSettingsProvider({ children }) {
-    const stored = loadStoredSettings();
+    const { user: authUser, accessToken, isAuthenticated } = useAuth();
+    const [profile, setProfile] = useState(EMPTY_PROFILE);
+    const [profileLoading, setProfileLoading] = useState(Boolean(isAuthenticated));
+    const [profileError, setProfileError] = useState('');
+    const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+    const [notifications, setNotifications] = useState(loadNotifications);
 
-    const [profile, setProfile] = useState(() => ({
-        name: stored?.profile?.name ?? CURRENT_USER.name,
-        username: stored?.profile?.username ?? CURRENT_USER.username,
-        role: stored?.profile?.role ?? CURRENT_USER.role,
-        direction: stored?.profile?.direction ?? CURRENT_USER.direction,
-        bio: stored?.profile?.bio ?? CURRENT_USER.bio,
-        skills: stored?.profile?.skills ?? [...CURRENT_USER.skills],
-        location: stored?.profile?.location ?? CURRENT_USER.location,
-        website: stored?.profile?.website ?? CURRENT_USER.website,
-    }));
-
-    const [notifications, setNotifications] = useState(
-        () => stored?.notifications ?? { ...DEFAULT_NOTIFICATIONS },
-    );
-
-    const persist = useCallback((nextProfile, nextNotifications) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            profile: nextProfile,
-            notifications: nextNotifications,
-        }));
+    useEffect(() => {
+        const refreshProfile = () => setProfileRefreshKey(key => key + 1);
+        window.addEventListener('skillgit:profile-refresh', refreshProfile);
+        window.addEventListener('focus', refreshProfile);
+        return () => {
+            window.removeEventListener('skillgit:profile-refresh', refreshProfile);
+            window.removeEventListener('focus', refreshProfile);
+        };
     }, []);
 
-    const updateProfile = useCallback((patch) => {
-        setProfile(prev => {
-            const next = { ...prev, ...patch };
-            persist(next, notifications);
-            return next;
-        });
-    }, [notifications, persist]);
+    useEffect(() => {
+        let cancelled = false;
+        if (!isAuthenticated || !accessToken) {
+            setProfile(EMPTY_PROFILE);
+            setProfileLoading(false);
+            setProfileError('');
+            return undefined;
+        }
 
-    const saveProfile = useCallback((nextProfile) => {
-        setProfile(nextProfile);
-        persist(nextProfile, notifications);
-    }, [notifications, persist]);
+        setProfileLoading(true);
+        setProfileError('');
+        api.getProfile(accessToken)
+            .then(data => {
+                if (!cancelled) setProfile({ ...EMPTY_PROFILE, ...data, stats: { ...EMPTY_PROFILE.stats, ...data.stats } });
+            })
+            .catch(error => {
+                if (cancelled) return;
+                setProfile({ ...EMPTY_PROFILE, ...authUser, stats: EMPTY_PROFILE.stats });
+                setProfileError(error.message || 'Не удалось загрузить профиль');
+            })
+            .finally(() => {
+                if (!cancelled) setProfileLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [accessToken, authUser, isAuthenticated, profileRefreshKey]);
+
+    const saveProfile = useCallback(async (nextProfile) => {
+        if (!accessToken) throw new Error('Войдите в аккаунт, чтобы сохранить профиль');
+        const fields = ['name', 'username', 'role', 'direction', 'bio', 'skills', 'location', 'website', 'company'];
+        const changes = Object.fromEntries(fields.map(field => [field, nextProfile[field]]));
+        const saved = await api.updateProfile(changes, accessToken);
+        setProfile({ ...EMPTY_PROFILE, ...saved, stats: { ...EMPTY_PROFILE.stats, ...saved.stats } });
+        return saved;
+    }, [accessToken]);
 
     const toggleNotification = useCallback((id) => {
-        setNotifications(prev => {
-            const next = { ...prev, [id]: !prev[id] };
-            persist(profile, next);
+        setNotifications(previous => {
+            const next = { ...previous, [id]: !previous[id] };
+            saveNotifications(next);
             return next;
         });
-    }, [persist, profile]);
+    }, []);
 
-    const user = useMemo(() => ({
-        ...CURRENT_USER,
-        ...profile,
-        stats: CURRENT_USER.stats,
-    }), [profile]);
+    const getDirectionLabel = useCallback(id => {
+        if (!id) return '';
+        return DIRECTIONS.find(direction => direction.id === id)?.label ?? id;
+    }, []);
 
     const value = useMemo(() => ({
-        user,
+        user: profile,
         profile,
+        profileLoading,
+        profileError,
         notifications,
-        updateProfile,
         saveProfile,
         toggleNotification,
-        getDirectionLabel: (id) => DIRECTIONS.find(d => d.id === id)?.label ?? id,
-    }), [user, profile, notifications, updateProfile, saveProfile, toggleNotification]);
+        getDirectionLabel,
+    }), [profile, profileLoading, profileError, notifications, saveProfile, toggleNotification, getDirectionLabel]);
 
     return (
         <UserSettingsContext.Provider value={value}>
